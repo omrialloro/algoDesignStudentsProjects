@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <title>Sleeve OS v5.6 - Batch Import Ready</title>
+  <style>
+    body { margin:0; overflow:hidden; background:#050507; color:#ff00ff; font-family: 'Courier New', monospace; }
+    #hud { position: fixed; top: 10px; left: 10px; pointer-events: none; z-index: 10; font-size: 12px; text-shadow: 0 0 5px #ff00ff; }
+    .lil-gui { 
+        --name-color: #ff00ff; 
+        --widget-color: #1a1a1a; 
+        --hover-color: #333333; 
+        --focus-color: #ff00ff; 
+        --number-color: #ff99ff;
+        --bg-color: #0c0c0c;
+        --string-color: #ff00ff; 
+    }
+    .lil-gui .controller.string input { color: #ff00ff; }
+  </style>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+<div id="hud">SYSTEM: SLEEVE_OS_V5.6 | MODE: MULTI_FILE_SUPPORT | SAFE_MODE</div>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import GUI from 'https://cdn.jsdelivr.net/npm/lil-gui@0.19/+esm';
+
+// זוויות קבועות
+const ANGLES = {
+  "-90° (אורכי)": -Math.PI/2,
+  "-45°": -Math.PI/4,
+  "-30°": -Math.PI/6,
+  "0° (היקפי)": 0,
+  "30°": Math.PI/6,
+  "45°": Math.PI/4,
+  "90° (אורכי)": Math.PI/2
+};
+
+let pulseFolders = [];
+let fPulse;
+let presetCtrl = null; // משתנה לשליטה בדרפדאון
+
+const state = {
+  // --- הגדרות ליבה (לא שונו) ---
+  morph: 1, 
+  resolution: 4, 
+  layers: 1, 
+  layerSpacing: 0.15, 
+  wireframe: true,
+  temperature: 0.0, 
+  roughness: 0.0,
+  
+  waveActive: true, 
+  waveAmp: 0.07,     
+  waveFreq: 2.0, 
+  waveSpeed: 0.4, 
+  waveAngle: 3.15,   
+  
+  pulses: [],
+
+  // --- ניהול ספרייה (השינוי החדש) ---
+  presetsLibrary: {}, // כאן נאחסן את כל הקבצים שטענת
+  selectedPreset: "Current", // התחושה שנבחרה כרגע
+
+  addPulse: () => {
+    if(state.pulses.length < 6) {
+      state.pulses.push({ isEnabled: true, u: 0.5, v: 0.5, amp: 0.2, bpm: 60, rad: 0.12 });
+      refreshPulseUI();
+    }
+  },
+  
+  exportJSON: () => {
+    // מנקה את השדות הפנימיים לפני שמירה כדי שהקובץ יהיה נקי
+    const exportData = { ...state };
+    delete exportData.presetsLibrary;
+    delete exportData.selectedPreset;
+    
+    const blob = new Blob([JSON.stringify(exportData)], {type:'application/json'});
+    const a = document.createElement('a'); 
+    a.href = URL.createObjectURL(blob); 
+    // מבקש שם קובץ כדי שיהיה סדר
+    const name = prompt("שם הקובץ לשמירה (ללא סיומת):", "preset_" + Date.now());
+    if(name) {
+        a.download = name + '.json'; 
+        a.click();
+    }
+  },
+
+  importJSON: () => {
+    const input = document.createElement('input'); 
+    input.type = 'file';
+    input.accept = '.json';
+    input.multiple = true; // --- השינוי הקריטי: מאפשר לבחור הרבה קבצים ---
+    
+    input.onchange = e => {
+      const files = e.target.files;
+      if(!files.length) return;
+
+      Array.from(files).forEach(file => {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const data = JSON.parse(event.target.result);
+                // שימוש בשם הקובץ כשם התחושה (מסיר את הסיומת .json)
+                const presetName = file.name.replace('.json', '');
+                state.presetsLibrary[presetName] = data;
+                
+                // עדכון הדרפדאון ב-GUI
+                updatePresetDropdown();
+            } catch(err) {
+                console.error("Error parsing " + file.name);
+            }
+        };
+        reader.readAsText(file);
+      });
+      alert(`נטענו ${files.length} קבצים לספרייה. בחר אותם מהרשימה.`);
+    };
+    input.click();
+  }
+};
+
+// --- SCENE ---
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 100);
+camera.position.set(0, 0, 9);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+const controls = new OrbitControls(camera, renderer.domElement);
+
+const markerGeo = new THREE.ConeGeometry(0.12, 0.3, 4);
+const elbowMarker = new THREE.Mesh(markerGeo, new THREE.MeshBasicMaterial({color: 0xffff00})); 
+scene.add(elbowMarker);
+const wristMarker = new THREE.Mesh(markerGeo, new THREE.MeshBasicMaterial({color: 0x00ff00})); 
+scene.add(wristMarker);
+
+// --- SHADER (זהה ל-v5.5) ---
+const vert = `
+  uniform float uTime; uniform float uMorph; uniform float uWaveAmp; uniform float uWaveFreq; 
+  uniform float uWaveSpeed; uniform float uWaveAngle; uniform bool uWaveActive;
+  uniform float uLayerZ;
+  struct Pulse { bool isEnabled; vec2 uv; float amp; float bpm; float rad; };
+  uniform Pulse uPulses[6];
+  varying vec2 vUv; varying float vDisp;
+
+  void main() {
+    vUv = uv; float d = 0.0;
+    if(uWaveActive) {
+      float cosA = cos(uWaveAngle); float sinA = sin(uWaveAngle);
+      float rotX = (uv.x * cosA - uv.y * sinA) * uWaveFreq;
+      d += sin((rotX + uTime * uWaveSpeed) * 6.28) * uWaveAmp;
+    }
+    for(int i=0; i<6; i++) {
+      if(uPulses[i].isEnabled) {
+        float dist = distance(uv, uPulses[i].uv);
+        float dx = abs(uv.x - uPulses[i].uv.x);
+        if(dx > 0.5) dx = 1.0 - dx;
+        float dy = uv.y - uPulses[i].uv.y;
+        float dWrap = sqrt(dx*dx + dy*dy);
+        float pAnim = (uPulses[i].bpm > 0.0) ? (0.5 + 0.5 * sin(uTime * (uPulses[i].bpm/60.0) * 6.28)) : 1.0;
+        d += smoothstep(uPulses[i].rad, 0.0, dWrap) * uPulses[i].amp * pAnim;
+      }
+    }
+    vDisp = d;
+    float r = 1.0 - d + uLayerZ; float a = uv.x * 6.28;
+    vec3 cPos = vec3(cos(a)*r, uv.y*4.0-2.0, sin(a)*r);
+    vec3 pPos = vec3(uv.x*6.0-3.0, d + uLayerZ, uv.y*4.0-2.0);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(mix(cPos, pPos, uMorph), 1.0);
+  }
+`;
+
+const frag = `
+  uniform float uTemp; uniform float uRough; uniform float uTime;
+  varying vec2 vUv; varying float vDisp;
+  float hash(vec2 p) { return fract(sin(dot(p, vec2(12.7, 7.2))) * 43758.5); }
+  void main() {
+    vec3 cold = vec3(0.1, 0.4, 1.0);
+    vec3 neutral = vec3(0.9, 0.9, 1.0);
+    vec3 hot = vec3(1.0, 0.1, 0.0);
+    vec3 col = uTemp < 0.0 ? mix(neutral, cold, -uTemp) : mix(neutral, hot, uTemp);
+    gl_FragColor = vec4(col + vDisp + (hash(vUv+uTime*0.1)-0.5)*uRough, 0.9);
+  }
+`;
+
+let layers = [];
+function createLayers() {
+  layers.forEach(l => { scene.remove(l); l.geometry.dispose(); l.material.dispose(); });
+  layers = [];
+  const geo = new THREE.PlaneGeometry(1, 1, state.resolution, state.resolution);
+  for(let i=0; i<state.layers; i++) {
+    const mat = new THREE.ShaderMaterial({
+      uniforms: {
+        uTime:{value:0}, uMorph:{value:state.morph}, uWaveAmp:{value:state.waveAmp}, uWaveFreq:{value:state.waveFreq},
+        uWaveSpeed:{value:state.waveSpeed}, uWaveAngle:{value:state.waveAngle}, uWaveActive:{value:state.waveActive},
+        uTemp:{value:state.temperature}, uRough:{value:state.roughness}, uLayerZ:{value: i*state.layerSpacing},
+        uPulses: { value: Array(6).fill(0).map(() => ({ isEnabled: false, uv: new THREE.Vector2(), amp: 0, bpm: 0, rad: 0 })) }
+      },
+      vertexShader: vert, fragmentShader: frag, transparent: true, side: THREE.DoubleSide, wireframe: state.wireframe
+    });
+    const m = new THREE.Mesh(geo, mat); scene.add(m); layers.push(m);
+  }
+}
+
+function refreshPulseUI() {
+  if (!fPulse) return;
+  pulseFolders.forEach(f => f.destroy()); pulseFolders = [];
+  state.pulses.forEach((p, i) => {
+    const f = fPulse.addFolder(`פולס ${i+1}`);
+    f.add(p, 'isEnabled').name('פעיל');
+    f.add(p, 'u', 0, 1).name('מיקום U');
+    f.add(p, 'v', 0, 1).name('מיקום V');
+    f.add(p, 'amp', 0, 0.3).name('עוצמה');
+    f.add(p, 'rad', 0, 0.3).name('רדיוס');
+    f.add(p, 'bpm', 0, 240).name('קצב BPM');
+    pulseFolders.push(f);
+  });
+}
+
+// פונקציה לעדכון ה-Dropdown של התחושות
+function updatePresetDropdown() {
+    if(presetCtrl) presetCtrl.destroy();
+    const options = Object.keys(state.presetsLibrary);
+    if(options.length === 0) return;
+    
+    presetCtrl = fFile.add(state, 'selectedPreset', options).name('📚 בחר תחושה').onChange(name => {
+        const data = state.presetsLibrary[name];
+        if(data) {
+            // טוען את הנתונים אבל שומר על הספרייה קיימת
+            const lib = state.presetsLibrary;
+            Object.assign(state, data);
+            state.presetsLibrary = lib; // מחזיר את הספרייה למקום
+            state.selectedPreset = name;
+            
+            createLayers();
+            // מעדכן את כל ה-UI חוץ מה-Dropdown עצמו
+            gui.controllersRecursive().forEach(c => {
+                if(c !== presetCtrl) c.updateDisplay();
+            });
+            refreshPulseUI();
+        }
+    });
+}
+
+createLayers();
+
+const gui = new GUI({ title: 'SLEEVE OS V5.6' });
+const fView = gui.addFolder('1. מבנה ותצוגה');
+fView.add(state, 'morph', 0, 1).name('גליל <-> שטוח');
+fView.add(state, 'resolution', [4, 8, 16, 32, 64, 128, 256]).name('רזולוציה (BIT)').onChange(createLayers);
+fView.add(state, 'wireframe').name('גריד קווי').onChange(v => layers.forEach(l => l.material.wireframe = v));
+fView.add(state, 'layers', 1, 4, 1).name('שכבות').onChange(createLayers);
+fView.add(state, 'layerSpacing', 0, 0.4).name('ריווח Z');
+
+const fSense = gui.addFolder('2. ליבה (Sensory)');
+fSense.add(state, 'temperature', -1, 1).name('טמפרטורה');
+fSense.add(state, 'roughness', 0, 1).name('נמלול');
+
+const fWave = gui.addFolder('3. גלים');
+fWave.add(state, 'waveActive').name('פעיל');
+fWave.add(state, 'waveAngle', ANGLES).name('זווית קבועה'); 
+fWave.add(state, 'waveAmp', 0, 0.2).name('עוצמה (Max 0.2)');
+fWave.add(state, 'waveFreq', 0.1, 10.0).name('תדירות');
+fWave.add(state, 'waveSpeed', 0, 4).name('מהירות');
+
+fPulse = gui.addFolder('4. פולסים');
+fPulse.add(state, 'addPulse').name('➕ הוסף פולס');
+
+const fFile = gui.addFolder('5. קבצים וספרייה');
+fFile.add(state, 'exportJSON').name('📤 שמור תחושה נוכחית');
+fFile.add(state, 'importJSON').name('📂 טען קבצים לספרייה (Multi)');
+// כאן יופיע ה-Dropdown אחרי טעינה
+
+function animate(t) {
+  requestAnimationFrame(animate);
+  const time = t/1000;
+  
+  layers.forEach(l => {
+    const u = l.material.uniforms;
+    u.uTime.value = time; u.uMorph.value = state.morph;
+    u.uTemp.value = state.temperature; u.uRough.value = state.roughness;
+    u.uWaveActive.value = state.waveActive; u.uWaveAmp.value = state.waveAmp;
+    u.uWaveFreq.value = state.waveFreq; u.uWaveSpeed.value = state.waveSpeed; u.uWaveAngle.value = state.waveAngle;
+    state.pulses.forEach((p, idx) => {
+      if(idx < 6) {
+        u.uPulses.value[idx].isEnabled = p.isEnabled;
+        u.uPulses.value[idx].uv.set(p.u, p.v);
+        u.uPulses.value[idx].amp = p.amp;
+        u.uPulses.value[idx].bpm = p.bpm;
+        u.uPulses.value[idx].rad = p.rad;
+      }
+    });
+  });
+
+  const m = state.morph;
+  elbowMarker.position.set(0, (1-m)*2.2, m*2.2);
+  elbowMarker.rotation.x = m * (-Math.PI/2); 
+  wristMarker.position.set(0, (1-m)*-2.2, m*-2.2);
+  wristMarker.rotation.x = Math.PI + (m * (Math.PI/2));
+
+  controls.update();
+  renderer.render(scene, camera);
+}
+animate(0);
+</script>
+</body>
+</html>

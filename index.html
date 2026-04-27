@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Design with Algorithms — Student Projects</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #ffffff;
+      --bg-secondary: #f6f5f2;
+      --text-primary: #1a1a19;
+      --text-secondary: #5f5e5a;
+      --text-tertiary: #888780;
+      --border: rgba(0,0,0,0.12);
+      --border-hover: rgba(0,0,0,0.25);
+      --radius-md: 8px;
+      --radius-lg: 5px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: rgb(0,70,120,0.84);
+        --bg-secondary: rgb(210,30,30,0.9);
+        --text-primary: rgb(250,10,200);
+        --text-secondary: rgb(0,250,0);
+        --text-tertiary: rgb(250,250,0);
+        --border: rgba(255,255,255,0.12);
+        --border-hover: rgba(255,255,255,0.28);
+      }
+    }
+
+    body {
+      font-family: "SF Mono", "Fira Code", "Fira Mono", "Roboto Mono", Menlo, Consolas, "Courier New", monospace;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+
+    #grid-canvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .page {
+      position: relative;
+      z-index: 1;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 3rem 1.5rem 4rem;
+    }
+
+    .hero {
+      border-bottom: 0.5px solid var(--border);
+      padding-bottom: 2rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .tag {
+      display: inline-block;
+      background: #e6f1fb;
+      color: #0c447c;
+      font-size: 12px;
+      font-weight: 500;
+      padding: 3px 12px;
+      border-radius: 10px;
+      margin-bottom: 1rem;
+      letter-spacing: 0.02em;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .tag { background: #0c447c; color: #b5d4f4; }
+    }
+
+    .hero h1 {
+      font-size: 32px;
+      font-weight: 500;
+      margin-bottom: 0.85rem;
+      letter-spacing: -0.01em;
+    }
+
+    .hero p {
+      font-size: 15px;
+      color: var(--text-secondary);
+      line-height: 1.75;
+      max-width: 660px;
+    }
+
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.25rem;
+      margin-top: 1.25rem;
+    }
+
+    .meta span { font-size: 13px; color: var(--text-tertiary); }
+    .meta strong { color: var(--text-secondary); font-weight: 500; }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 1rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 12px;
+    }
+
+    .card {
+      background: var(--bg);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 1.1rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      transition: border-color 0.15s;
+    }
+
+    .card:hover { border-color: var(--border-hover); }
+
+    .card-header { display: flex; align-items: center; gap: 10px; }
+
+    .avatar {
+      width: 38px; height: 38px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 13px; font-weight: 500; flex-shrink: 0;
+    }
+
+    .card-name { font-size: 15px; font-weight: 500; }
+    .card-desc { font-size: 13px; color: var(--text-secondary); line-height: 1.65; flex: 1; }
+    .card-links { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 2px; }
+
+    .btn {
+      font-size: 12px; font-weight: 500;
+      padding: 5px 13px;
+      border-radius: var(--radius-md);
+      border: 0.5px solid var(--border);
+      background: transparent;
+      color: var(--text-primary);
+      cursor: pointer; text-decoration: none;
+      display: inline-flex; align-items: center; gap: 5px;
+      transition: background 0.12s, border-color 0.12s;
+    }
+
+    .btn:hover { background: var(--bg-secondary); border-color: var(--border-hover); }
+
+    .btn-primary { background: #185fa5; color: #ffffff; border-color: #185fa5; }
+    .btn-primary:hover { background: #0c447c; border-color: #0c447c; }
+
+    .btn svg, .btn-primary svg {
+      width: 11px; height: 11px;
+      stroke: currentColor; fill: none;
+      stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+      flex-shrink: 0;
+    }
+
+    @media (max-width: 540px) {
+      .hero h1 { font-size: 26px; }
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="grid-canvas"></canvas>
+
+<div class="page">
+
+  <div class="hero">
+    <!-- <span class="tag" id="tag">Course projects</span> -->
+    <h1 id="course-title"></h1>
+    <p id="course-desc"></p>
+    <div class="meta">
+      <span><strong id="student-count"></strong> students</span>
+      <span id="course-year"></span>
+      <span id="course-instructor"></span>
+    </div>
+  </div>
+
+  <p class="section-label">Student projects</p>
+  <div class="grid" id="projects-grid"></div>
+
+</div>
+
+<script>
+/* ─── EDIT THIS DATA TO UPDATE THE PAGE ─────────────────────────────────── */
+
+const courseData = {
+  course: {
+    title: "Design with Algorithms",
+    description: "An exploration of computational design methods, where students use algorithmic thinking to generate, iterate, and evaluate design solutions. Projects range from generative typography and parametric structures to data-driven visual systems and interactive experiences.",
+    year: "2024–2025",
+    instructor: "Studio 4B"
+  },
+  students: [
+    {
+      name: "Eli Zuk",
+      html: "eliZuk.html",
+      folder: "eliZuk/",
+      description: "Generative poster system using recursive subdivision and Voronoi diagrams to produce a series of typographic layouts."
+    },
+    {
+      name: "Tal Ulman",
+      html: "TalUlman.html",
+      folder: "tal_mizrahi/",
+      description: "Data-driven identity for an urban garden — visual elements grow and shift with seasonal climate measurements."
+    },
+    {
+      name: "Yael Shinker",
+      html: "yaelShinker/index_final.html",
+      folder: "shir_bendavid/",
+      description: "Interactive typeface where letterforms morph between two extremes based on user-defined tension parameters."
+    },
+    {
+      name: "Tzahi Shemesh",
+      html: "tzahiShemesh/index.html",
+      folder: "tzahiShemesh/",
+      description: "Sound-reactive visual system that translates live audio frequencies into shifting geometric compositions."
+    },
+    {
+      name: "Chen Elkaslasi",
+      html: "chenElkaslasi.html",
+      folder: "chenElkaslasi/",
+      description: "Sound-reactive visual system that translates live audio frequencies into shifting geometric compositions."
+    }
+  ]
+};
+
+/* ─── END OF EDITABLE DATA ───────────────────────────────────────────────── */
+
+const avatarStyles = [
+  { bg: "#e6f1fb", color: "#0c447c" },
+  { bg: "#e1f5ee", color: "#085041" },
+  { bg: "#eeedfe", color: "#3c3489" },
+  { bg: "#faeeda", color: "#633806" },
+  { bg: "#fbeaf0", color: "#72243e" },
+  { bg: "#faece7", color: "#712b13" },
+];
+
+const iconExternal = `<svg viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><path d="M21 3L9 15"/><path d="M9 3H3v18h18v-6"/></svg>`;
+const iconFolder   = `<svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>`;
+
+function initials(name) {
+  return name.split(" ").map(w => w[0]).join("").toUpperCase().slice(0, 2);
+}
+
+function render() {
+  const c = courseData.course;
+  document.title = c.title + " — Projects";
+  document.getElementById("course-title").textContent = c.title;
+  document.getElementById("course-desc").textContent = c.description;
+  document.getElementById("student-count").textContent = courseData.students.length;
+  document.getElementById("course-year").textContent = c.year;
+  document.getElementById("course-instructor").textContent = c.instructor;
+
+  const grid = document.getElementById("projects-grid");
+  courseData.students.forEach((s, i) => {
+    const av = avatarStyles[i % avatarStyles.length];
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <div class="card-header">
+        <div class="avatar" style="background:${av.bg};color:${av.color}">${initials(s.name)}</div>
+        <span class="card-name">${s.name}</span>
+      </div>
+      <p class="card-desc">${s.description}</p>
+      <div class="card-links">
+        <a class="btn btn-primary" href="${s.html}" target="_blank">${iconExternal} View project</a>
+        <a class="btn" href="${s.folder}" target="_blank">${iconFolder} Files</a>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+render();
+
+/* ─── CANVAS GRID ANIMATION ──────────────────────────────────────────────── */
+(function () {
+  const canvas = document.getElementById("grid-canvas");
+  const ctx    = canvas.getContext("2d");
+
+  const SPACING    = 60;   // static grid cell size px
+  const LINE_COUNT = 30;   // number of moving lines
+  const STATIC_A   = 0.57; // static grid opacity
+
+  let W, H;
+
+  function resize() {
+    W = canvas.width  = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  function makeLine() {
+    const horiz = Math.random() < 0.5;
+    return {
+      horiz,
+      pos:          horiz ? Math.random() * H : Math.random() * W,
+      speed:        (Math.random() * 0.5 + 0.15) * (Math.random() < 0.5 ? 1 : -1),
+      baseAlpha:    Math.random() * 0.15 + 0.05,
+      phase:        Math.random() * Math.PI * 2,
+      flickerRate:  Math.random() * 0.03 + 0.006,
+    };
+  }
+
+  const lines = Array.from({ length: LINE_COUNT }, makeLine);
+
+  function drawStaticGrid() {
+    ctx.strokeStyle = `rgba(50, 200, 180, ${STATIC_A})`;
+    ctx.lineWidth = 0.1;
+    for (let x = 0; x <= W; x += SPACING) {
+      ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+    }
+    for (let y = 0; y <= H; y += SPACING) {
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    }
+  }
+
+  function animate() {
+    ctx.clearRect(0, 0, W, H);
+    drawStaticGrid();
+
+    lines.forEach(ln => {
+      ln.pos   += ln.speed;
+      ln.phase += ln.flickerRate;
+
+      // wrap
+      const limit = ln.horiz ? H : W;
+      if (ln.pos < -1) ln.pos = limit + 1;
+      if (ln.pos > limit + 1) ln.pos = -1;
+
+      // flickering alpha: sine wave keeps it always visible but varying
+      const flicker = 0.55 + 0.45 * Math.sin(ln.phase);
+      const a = ln.baseAlpha * flicker;
+
+      ctx.strokeStyle = `rgba(60, 230, 190, ${a})`;
+      ctx.lineWidth   = 6;
+      ctx.beginPath();
+      if (ln.horiz) {
+        ctx.moveTo(0, ln.pos); ctx.lineTo(W, ln.pos);
+      } else {
+        ctx.moveTo(ln.pos, 0); ctx.lineTo(ln.pos, H);
+      }
+      ctx.stroke();
+    });
+
+    requestAnimationFrame(animate);
+  }
+
+  animate();
+})();
+</script>
+</body>
+</html>

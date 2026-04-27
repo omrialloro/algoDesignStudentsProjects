@@ -1,0 +1,336 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Material Pro Synth: XL Display</title>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.9.3/lib/p5.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --md-sys-color-primary: #ffb2be;
+            --md-sys-color-on-primary: #660028;
+            --md-sys-color-surface: #141216;
+            --md-sys-color-surface-variant: #2b2930;
+            --md-sys-color-on-surface: #e9e0e4;
+            --md-sys-color-outline: #9a8d95;
+            --accent-1: #ff5252;
+            --accent-2: #00e676;
+            --accent-3: #2979ff;
+        }
+
+        * { box-sizing: border-box; transition: background 0.2s, color 0.2s, transform 0.1s; }
+        
+        body {
+            margin: 0; padding: 0;
+            background-color: #0c0b0d;
+            color: var(--md-sys-color-on-surface);
+            font-family: 'Google Sans', sans-serif;
+            overflow-x: hidden;
+        }
+
+        /* --- NAVIGATION --- */
+        .top-app-bar {
+            padding: 12px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(12, 11, 13, 0.98);
+            backdrop-filter: blur(24px);
+            position: sticky; top: 0; z-index: 1000;
+            border-bottom: 1px solid var(--md-sys-color-surface-variant);
+        }
+
+        .segmented-control { background: var(--md-sys-color-surface-variant); border-radius: 32px; padding: 4px; display: flex; }
+        .segment-btn { border: none; padding: 10px 24px; border-radius: 28px; background: transparent; color: var(--md-sys-color-on-surface); font-weight: 700; cursor: pointer; font-size: 14px; }
+        .segment-btn.active { background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
+
+        .m3-btn { border: none; padding: 0 24px; height: 48px; border-radius: 24px; font-weight: 700; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .btn-tonal { background: var(--md-sys-color-surface-variant); color: white; }
+        .btn-primary { background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); }
+
+        /* --- LAYOUT --- */
+        .main-container { max-width: 1900px; margin: 0 auto; padding: 20px 40px; }
+        .mode-section { display: none; min-height: calc(100vh - 100px); padding-bottom: 100px; }
+        .mode-section.active { display: block; }
+
+        /* --- THE XL STAGE --- */
+        .cinema-stage { 
+            width: 100%; 
+            height: 850px; /* INCREASED SIZE */
+            border-radius: 40px; 
+            overflow: hidden; 
+            background: #000; 
+            position: relative; 
+            margin-bottom: 32px; 
+            border: 2px solid var(--md-sys-color-surface-variant);
+            box-shadow: 0 50px 100px rgba(0,0,0,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* --- MIXER --- */
+        .mixer-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+        .channel-card { background: var(--md-sys-color-surface); border-radius: 32px; padding: 24px; border: 1px solid var(--md-sys-color-surface-variant); }
+        .mixer-controls { display: flex; gap: 20px; align-items: flex-end; margin-top: 16px; }
+        .v-slider { appearance: slider-vertical; width: 12px; height: 110px; background: var(--md-sys-color-surface-variant); border-radius: 10px; cursor: pointer; }
+        .settings-group { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+        select { background: var(--md-sys-color-surface-variant); border: none; color: white; padding: 10px; border-radius: 14px; font-family: inherit; width: 100%; cursor: pointer; }
+
+        /* --- XL CURSOR MODE --- */
+        .cursor-layout { display: grid; grid-template-columns: 350px 1fr; gap: 32px; height: 90vh; }
+        .sidebar { background: var(--md-sys-color-surface); border-radius: 40px; padding: 40px; border: 1px solid var(--md-sys-color-surface-variant); overflow-y: auto; }
+        .display-area { border-radius: 40px; background: #000; position: relative; overflow: hidden; cursor: none; border: 2px solid var(--md-sys-color-surface-variant); display: flex; align-items: center; justify-content: center; }
+        #displayImage { max-width: 100%; max-height: 100%; object-fit: contain; }
+        #magnifier { position: fixed; width: 220px; height: 220px; border: 4px solid var(--md-sys-color-primary); border-radius: 50%; pointer-events: none; z-index: 999; background: #000; overflow: hidden; display: none; transform: translate(-50%, -50%); box-shadow: 0 0 80px rgba(0,0,0,1); }
+    </style>
+</head>
+<body>
+
+    <header class="top-app-bar">
+        <div class="segmented-control">
+            <button class="segment-btn active" onclick="switchMode('scan', this)">Visual Scanner</button>
+            <button class="segment-btn" onclick="switchMode('cursor', this)">Live Cursor</button>
+        </div>
+        <div class="action-group" style="display: flex; gap: 12px;">
+            <button id="audioBtnGlobal" class="m3-btn btn-primary" onclick="toggleGlobalAudio()">Enable Audio</button>
+            <button class="m3-btn btn-tonal" onclick="document.getElementById('globalUpload').click()">Upload Image</button>
+            <button class="m3-btn btn-tonal" style="background:transparent; border:1px solid #444" id="randomBtn">Random image</button>
+            <input type="file" id="globalUpload" accept="image/*" style="display:none">
+        </div>
+    </header>
+
+    <main class="main-container">
+        <div id="section-scan" class="mode-section active">
+            <div class="cinema-stage" id="image-panel"></div>
+            
+            <div style="display: flex; justify-content: center; align-items: center; gap: 40px; margin-bottom: 40px;">
+                <div class="segmented-control" style="background: #000; border: 1px solid var(--md-sys-color-surface-variant);">
+                    <button id="mode-hsv" class="segment-btn active" onclick="setAnalysisMode('hsv')">HSV Mode</button>
+                    <button id="mode-rgb" class="segment-btn" onclick="setAnalysisMode('rgb')">RGB Mode</button>
+                </div>
+                <button class="m3-btn btn-primary" style="height: 80px; padding: 0 80px; font-size: 22px; border-radius: 40px;" id="playAllBtn">▶ Play Full scan</button>
+            </div>
+
+            <div class="mixer-grid" id="mixer-container"></div>
+        </div>
+
+        <div id="section-cursor" class="mode-section">
+            <div class="cursor-layout">
+                <div class="sidebar">
+                    <label style="font-size: 10px; font-weight: 700; color: var(--md-sys-color-outline); text-transform: uppercase;">Synthesis Profile</label>
+                    <select id="audioProfile" style="margin-top: 12px; margin-bottom: 40px; height: 50px; font-size: 16px;">
+                        <option value="zen">🧘 Zen Garden</option>
+                        <option value="neon">🕹️ Cyber City</option>
+                        <option value="cathedral">⛪ Cathedral</option>
+                        <option value="deepsea">🌊 Deep Sea</option>
+                        <option value="glitch">⚡ Electric Pulse</option>
+                    </select>
+                    <div style="display:flex; flex-direction:column; gap:24px;">
+                        <div style="font-size: 2rem; font-weight: 700; color:#ff5252">R <span id="rNum">0</span></div>
+                        <div style="font-size: 2rem; font-weight: 700; color:#00e676">G <span id="gNum">0</span></div>
+                        <div style="font-size: 2rem; font-weight: 700; color:#2979ff">B <span id="bNum">0</span></div>
+                    </div>
+                </div>
+                <div class="display-area" id="main-display">
+                    <div id="magnifier"><canvas id="magCanvas" width="220" height="220"></canvas></div>
+                    <img id="displayImage" crossorigin="anonymous">
+                    <canvas id="sourceCanvas" style="display:none"></canvas>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const SCALES = { "Major": [0,2,4,5,7,9,11], "Minor": [0,2,3,5,7,8,10], "Oriental": [0,1,4,5,7,8,11], "Techno": [0,3,5,6,7,10] };
+        const INSTRUMENTS = {
+            "lead_sharp": { name: "Electric Lead", type: "sawtooth", attack: 0.05, filter: 3000, q: 5 },
+            "pad_soft": { name: "Cosmic Pad", type: "sine", attack: 0.4, filter: 800, q: 1 },
+            "bass_deep": { name: "Neon Bass", type: "triangle", attack: 0.02, filter: 300, q: 2 },
+            "pluck_metal": { name: "Glitch Pluck", type: "square", attack: 0.005, filter: 1500, q: 10 }
+        };
+
+        let analysisMode = 'hsv', audioCtx, reverbNode, channelGains = [null, null, null], isAudioStarted = false;
+        let cursorOscs = {}, cursorGains = {}, scanData = {r:[], g:[], b:[], h:[], s:[], v:[]}, isPlaying = false, startTime = 0;
+        
+        const channelDefs = {
+            hsv: [{ id: 'h', label: 'Hue', color: '#ff5252' }, { id: 's', label: 'Saturation', color: '#00e676' }, { id: 'v', label: 'Value', color: '#2979ff' }],
+            rgb: [{ id: 'r', label: 'Red', color: '#ff5252' }, { id: 'g', label: 'Green', color: '#00e676' }, { id: 'b', label: 'Blue', color: '#2979ff' }]
+        };
+
+        async function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                reverbNode = audioCtx.createConvolver();
+                const length = 44100 * 2, impulse = audioCtx.createBuffer(2, length, audioCtx.sampleRate);
+                for(let i=0; i<2; i++) {
+                    let ch = impulse.getChannelData(i);
+                    for(let j=0; j<length; j++) ch[j] = (Math.random()*2-1)*Math.pow(1-j/length, 2.5);
+                }
+                reverbNode.buffer = impulse; reverbNode.connect(audioCtx.destination);
+                for(let i=0; i<3; i++) { channelGains[i] = audioCtx.createGain(); channelGains[i].connect(reverbNode); channelGains[i].gain.value = 0.5; }
+                ['r','g','b'].forEach(ch => {
+                    cursorOscs[ch] = audioCtx.createOscillator(); cursorGains[ch] = audioCtx.createGain(); cursorGains[ch].gain.value = 0;
+                    cursorOscs[ch].connect(cursorGains[ch]); cursorGains[ch].connect(audioCtx.destination); cursorOscs[ch].start();
+                });
+            }
+            if (audioCtx.state === 'suspended') await audioCtx.resume();
+            isAudioStarted = true; document.getElementById('audioBtnGlobal').innerText = "AUDIO ON";
+        }
+
+        function toggleGlobalAudio() { if(!audioCtx) initAudio(); else (audioCtx.state === 'running' ? audioCtx.suspend() : audioCtx.resume()); }
+
+        function renderMixer() {
+            const container = document.getElementById('mixer-container');
+            container.innerHTML = '';
+            channelDefs[analysisMode].forEach((cfg, i) => {
+                container.innerHTML += `
+                    <div class="channel-card">
+                        <span style="font-weight:700; color:${cfg.color}; font-size:12px; letter-spacing:1px;">${cfg.label.toUpperCase()}</span>
+                        <div id="graph-container-${i}" style="height:80px; background:#000; border-radius:16px; margin-top:10px;"></div>
+                        <div class="mixer-controls">
+                            <input type="range" class="v-slider" id="vol-${i}" min="0" max="1" step="0.01" value="0.5" oninput="if(channelGains[${i}]) channelGains[${i}].gain.value = this.value">
+                            <div class="settings-group">
+                                <select id="ins-${i}">${Object.entries(INSTRUMENTS).map(([k,v])=>`<option value="${k}">${v.name}</option>`).join('')}</select>
+                                <select id="scale-${i}">${Object.keys(SCALES).map(s=>`<option value="${s}">${s}</option>`).join('')}</select>
+                            </div>
+                        </div>
+                    </div>`;
+            });
+            initGraphs();
+        }
+
+        function setAnalysisMode(m) { analysisMode = m; document.getElementById('mode-hsv').className = (m==='hsv'?'segment-btn active':'segment-btn'); document.getElementById('mode-rgb').className = (m==='rgb'?'segment-btn active':'segment-btn'); renderMixer(); }
+
+        function autoAnalyze(img) {
+            img.loadPixels(); scanData = {r:[], g:[], b:[], h:[], s:[], v:[]};
+            for(let x=0; x<120; x++) {
+                let ix = Math.floor(p5.prototype.map(x,0,120,0,img.width)), r=0,g=0,b=0,c=0;
+                for(let y=0; y<img.height; y+=img.height/20) {
+                    let i = 4*(Math.floor(y)*img.width+ix);
+                    r+=img.pixels[i]; g+=img.pixels[i+1]; b+=img.pixels[i+2]; c++;
+                }
+                let R=r/c/255, G=g/c/255, B=b/c/255, max=Math.max(R,G,B), min=Math.min(R,G,B), d=max-min, h=0;
+                if(d!==0) h=(max==R?(G-B)/d+(G<B?6:0):max==G?(B-R)/d+2:(R-G)/d+4)/6;
+                scanData.r.push(R); scanData.g.push(G); scanData.b.push(B); scanData.h.push(h); scanData.s.push(max==0?0:d/max); scanData.v.push(max);
+            }
+        }
+
+        let imageP5 = new p5(p => {
+            let img;
+            p.setup = () => p.createCanvas(document.getElementById('image-panel').offsetWidth, 850).parent("image-panel");
+            p.draw = () => {
+                p.background(5);
+                if(img) {
+                    let s = Math.min(p.width/img.width, p.height/img.height);
+                    let w = img.width * s, h = img.height * s, x = (p.width - w) / 2, y = (p.height - h) / 2;
+                    p.image(img, x, y, w, h);
+                    if(isPlaying) {
+                        let elapsed = (audioCtx.currentTime - startTime) / 10;
+                        if(elapsed <= 1) {
+                            p.stroke(255, 178, 190); p.strokeWeight(4);
+                            p.line(x + (elapsed * w), y, x + (elapsed * w), y + h);
+                        } else isPlaying = false;
+                    }
+                }
+            };
+            p.loadNewImage = src => p.loadImage(src, l => { img = l; autoAnalyze(l); });
+        });
+
+        let graphInstances = [];
+        function initGraphs() {
+            graphInstances.forEach(g => g.remove()); graphInstances = [];
+            [0,1,2].forEach(i => {
+                graphInstances.push(new p5(p => {
+                    p.setup = () => p.createCanvas(document.getElementById(`graph-container-${i}`).offsetWidth, 80).parent(`graph-container-${i}`);
+                    p.draw = () => {
+                        p.background(0); const activeSet = channelDefs[analysisMode], key = activeSet[i].id;
+                        if(!scanData[key].length) return;
+                        p.stroke(activeSet[i].color); p.noFill(); p.strokeWeight(2); p.beginShape();
+                        scanData[key].forEach((v, idx) => p.vertex(p.map(idx, 0, 119, 0, p.width), p.map(v, 0, 1, 75, 5)));
+                        p.endShape();
+                    };
+                }));
+            });
+        }
+
+        function playNote(freq, start, dur, instKey, channelIdx) {
+            if(!isAudioStarted) return;
+            const inst = INSTRUMENTS[instKey], osc = audioCtx.createOscillator(), g = audioCtx.createGain(), f = audioCtx.createBiquadFilter();
+            osc.type = inst.type; osc.frequency.setValueAtTime(freq, start);
+            f.type = "lowpass"; f.frequency.setValueAtTime(inst.filter, start); f.Q.setValueAtTime(inst.q, start);
+            g.gain.setValueAtTime(0, start); g.gain.linearRampToValueAtTime(0.2, start + inst.attack);
+            g.gain.exponentialRampToValueAtTime(0.001, start + dur);
+            osc.connect(f); f.connect(g); g.connect(channelGains[channelIdx]);
+            osc.start(start); osc.stop(start + dur);
+        }
+
+        document.getElementById("playAllBtn").onclick = async () => {
+            if(!scanData.h.length) return; await initAudio();
+            isPlaying = true; startTime = audioCtx.currentTime;
+            const activeSet = channelDefs[analysisMode];
+            [0,1,2].forEach(i => {
+                const key = activeSet[i].id;
+                for(let s=0; s<40; s++) {
+                    let val = scanData[key][Math.floor(s*3)], scale = document.getElementById(`scale-${i}`).value;
+                    let freq = 440 * Math.pow(2, (SCALES[scale][Math.floor(val * 14) % 7] + (i-1)*12)/12);
+                    playNote(freq, audioCtx.currentTime + (s/4), 0.6, document.getElementById(`ins-${i}`).value, i);
+                }
+            });
+        };
+
+        const displayArea = document.getElementById('main-display'), displayImg = document.getElementById('displayImage'), magEl = document.getElementById('magnifier');
+        const magCtx = document.getElementById('magCanvas').getContext('2d');
+
+        displayArea.addEventListener('mousemove', (e) => {
+            const rect = displayImg.getBoundingClientRect();
+            const imgRatio = displayImg.naturalWidth / displayImg.naturalHeight;
+            const contRatio = rect.width / rect.height;
+            let aW, aH, oX, oY;
+            if (contRatio > imgRatio) { aH = rect.height; aW = aH * imgRatio; oX = rect.left + (rect.width - aW) / 2; oY = rect.top; }
+            else { aW = rect.width; aH = aW / imgRatio; oX = rect.left; oY = rect.top + (rect.height - aH) / 2; }
+
+            if (e.clientX >= oX && e.clientX <= oX + aW && e.clientY >= oY && e.clientY <= oY + aH) {
+                magEl.style.display = 'block'; magEl.style.left = e.clientX + 'px'; magEl.style.top = e.clientY + 'px';
+                const iX = ((e.clientX - oX) / aW) * displayImg.naturalWidth, iY = ((e.clientY - oY) / aH) * displayImg.naturalHeight;
+                magCtx.drawImage(document.getElementById('sourceCanvas'), iX-30, iY-30, 60, 60, 0, 0, 220, 220);
+                magCtx.strokeStyle = 'white'; magCtx.beginPath(); magCtx.moveTo(110,0); magCtx.lineTo(110,220); magCtx.moveTo(0,110); magCtx.lineTo(220,110); magCtx.stroke();
+                const p = document.getElementById('sourceCanvas').getContext('2d').getImageData(iX, iY, 1, 1).data;
+                document.getElementById('rNum').innerText = p[0]; document.getElementById('gNum').innerText = p[1]; document.getElementById('bNum').innerText = p[2];
+                if(isAudioStarted) {
+                    const profile = document.getElementById('audioProfile').value;
+                    ['r','g','b'].forEach((ch, i) => {
+                        let v = p[i], freq, vol = 0.1;
+                        if (profile === 'zen') { cursorOscs[ch].type = 'sine'; freq = (130 * [1, 1.25, 1.5][i]) + (v * 0.4); vol = 0.12; }
+                        else if (profile === 'neon') { cursorOscs[ch].type = 'sawtooth'; freq = 55 + (v * (i + 0.5)); vol = 0.04; }
+                        else if (profile === 'cathedral') { cursorOscs[ch].type = 'triangle'; freq = 110 + (v * 0.8) + (i * 110); vol = 0.07; }
+                        else if (profile === 'deepsea') { cursorOscs[ch].type = 'sine'; freq = 35 + (v * 0.15) + (i * 15); vol = 0.18; }
+                        else if (profile === 'glitch') { cursorOscs[ch].type = 'square'; freq = 80 + (v * (i === 0 ? 8 : 1.5)); vol = 0.02; }
+                        cursorOscs[ch].frequency.setTargetAtTime(freq, audioCtx.currentTime, 0.03);
+                        cursorGains[ch].gain.setTargetAtTime(vol, audioCtx.currentTime, 0.03);
+                    });
+                }
+            } else magEl.style.display = 'none';
+        });
+
+        displayArea.onmouseleave = () => { magEl.style.display = 'none'; if(isAudioStarted) ['r','g','b'].forEach(ch => cursorGains[ch].gain.setTargetAtTime(0, audioCtx.currentTime, 0.1)); };
+
+        function updateUniversalImage(src) { 
+            imageP5.loadNewImage(src); displayImg.src = src; 
+            displayImg.onload = () => { const sCanv = document.getElementById('sourceCanvas'); sCanv.width = displayImg.naturalWidth; sCanv.height = displayImg.naturalHeight; sCanv.getContext('2d').drawImage(displayImg, 0, 0); }; 
+        }
+
+        function switchMode(mode, btn) { 
+            document.querySelectorAll('.mode-section').forEach(s => s.classList.remove('active')); 
+            document.querySelectorAll('.segment-btn').forEach(b => b.classList.remove('active')); 
+            document.getElementById('section-' + mode).classList.add('active'); btn.classList.add('active'); isPlaying = false; 
+        }
+
+        document.getElementById('randomBtn').onclick = () => updateUniversalImage(`https://picsum.photos/1600/900?random=${Date.now()}`);
+        document.getElementById('globalUpload').onchange = (e) => updateUniversalImage(URL.createObjectURL(e.target.files[0]));
+        window.onload = () => { renderMixer(); updateUniversalImage("https://picsum.photos/1600/900"); };
+    </script>
+</body>
+</html>

@@ -1,0 +1,3095 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>הגן הפסיכולוגי - הכל בקובץ אחד</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Varela+Round&display=swap');
+
+        body { margin: 0; overflow: hidden; font-family: 'Varela Round', sans-serif; background-color: #87CEEB; user-select: none; }
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+
+        /* UI Layers */
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; display: flex; justify-content: center; align-items: center; }
+
+        /* Modal - Park Entry */
+        #interact-modal {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 40px 60px;
+            border-radius: 30px;
+            text-align: center;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            pointer-events: auto;
+            display: none;
+            flex-direction: column;
+            gap: 25px;
+            border: 5px solid #4CAF50;
+            min-width: 300px;
+        }
+        #interact-modal h2 { margin: 0; color: #2E7D32; font-size: 32px; }
+
+        .btn-group { display: flex; gap: 20px; justify-content: center; margin-top: 20px; }
+        .action-btn { padding: 12px 35px; border-radius: 50px; border: none; cursor: pointer; font-weight: bold; font-size: 20px; transition: 0.2s; box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .btn-yes { background: #4CAF50; color: white; border: 3px solid transparent; }
+        .btn-no { background: #f44336; color: white; border: 3px solid transparent; }
+        .action-btn.selected { transform: scale(1.1); box-shadow: 0 0 15px rgba(0,0,0,0.3); border-color: #333; }
+
+        /* Controls Hint */
+        #controls-hint { position: absolute; bottom: 30px; width: 100%; text-align: center; color: rgba(255,255,255,0.9); text-shadow: 0 2px 4px rgba(0,0,0,0.8); font-size: 20px; z-index: 5; font-weight: bold; pointer-events: none; }
+
+        /* Booth Stage Overlay */
+        #booth-stage {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            display: none;
+            background: #000;
+        }
+        #booth-iframe {
+            width: 100%;
+            height: 100%;
+            border: 0;
+            display: block;
+            background: #000;
+        }
+        #stage-hint {
+            position: fixed;
+            top: 22px;
+            right: 22px;
+            z-index: 10000;
+            display: none;
+            background: rgba(0,0,0,0.45);
+            color: rgba(255,255,255,0.92);
+            border: 2px solid rgba(255,255,255,0.18);
+            border-radius: 22px;
+            padding: 12px 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+            font-size: 16px;
+            pointer-events: none;
+        }
+
+        
+        /* Minimap */
+        #minimap {
+            position: absolute;
+            left: 18px;
+            bottom: 18px;
+            z-index: 6;
+            width: 220px;
+            height: 140px;
+            border-radius: 16px;
+            background: rgba(0,0,0,0.25);
+            border: 2px solid rgba(255,255,255,0.35);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+            pointer-events: none;
+        }
+    
+        /* Hidden templates */
+        template { display: none; }
+    
+/* --- Topbar + Dashboard --- */
+#topbar{position:fixed;top:12px;left:12px;right:12px;display:flex;justify-content:flex-end;pointer-events:none;z-index:50;}
+#btn-endgame{pointer-events:auto;padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.18);
+  background:rgba(10,12,18,.55);color:#fff;font-weight:700;backdrop-filter: blur(10px);cursor:pointer;}
+#btn-endgame:hover{background:rgba(10,12,18,.72);}
+#dashModal{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:100;}
+#dashModal.show{display:flex;}
+#dashModal .backdrop{position:absolute;inset:0;background:rgba(0,0,0,.55);}
+#dashModal .panel{position:relative;width:min(920px,92vw);max-height:min(78vh,680px);overflow:auto;
+  border-radius:18px;border:1px solid rgba(255,255,255,.12);background:rgba(12,14,20,.92);color:#fff;
+  box-shadow:0 12px 40px rgba(0,0,0,.45);padding:18px 18px 14px;}
+#dashModal h2{margin:0 0 10px;font-size:18px;}
+#dashModal .meta{opacity:.8;font-size:12px;margin-bottom:10px;display:flex;gap:10px;flex-wrap:wrap;}
+#dashModal table{width:100%;border-collapse:collapse;font-size:13px;}
+#dashModal th,#dashModal td{padding:10px 8px;border-bottom:1px solid rgba(255,255,255,.10);vertical-align:top;}
+#dashModal th{opacity:.85;text-align:left;font-weight:700;}
+#dashModal .rowSmall{opacity:.75;font-size:12px;}
+#dashModal .actions{display:flex;justify-content:flex-end;gap:10px;margin-top:12px;}
+#dashModal button{padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.18);
+  background:rgba(255,255,255,.06);color:#fff;font-weight:700;cursor:pointer;}
+#dashModal button:hover{background:rgba(255,255,255,.10);}
+</style>
+    <script type="importmap"> { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } } </script>
+</head>
+<body>
+
+<div id="topbar"><button id="btn-endgame" title="פתיחת דשבורד ניתוח בכל רגע">סיים משחק</button></div>
+<div id="dashModal" aria-hidden="true">
+  <div class="backdrop"></div>
+  <div class="panel" role="dialog" aria-modal="true">
+    <h2>דשבורד ניתוח (ביניים)</h2>
+    <div class="meta" id="dashMeta"></div>
+    <div id="valuePanel" style="margin:10px 0 14px 0;"></div>
+    <table>
+      <thead><tr><th style="width:110px;">זמן</th><th style="width:90px;">ביתן</th><th>בחירה</th></tr></thead>
+      <tbody id="dashRows"></tbody>
+    </table>
+    <div class="actions">
+      <button id="btn-closeDash">חזור למשחק</button>
+    </div>
+  </div>
+</div>
+
+
+
+    <div id="ui-layer">
+        <div id="interact-modal">
+            <h2 id="modal-title">ביתן</h2>
+            <p style="font-size: 18px;">האם להיכנס?</p>
+            <div class="btn-group">
+                <button id="btn-enter" class="action-btn btn-yes selected">כן</button>
+                <button id="btn-cancel" class="action-btn btn-no">לא</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="controls-hint">חצים לתנועה | ימינה/שמאלה לבחירה | ENTER לאישור</div>
+    <div id="canvas-container"></div>
+    <canvas id="minimap" width="150" height="150" aria-hidden="true"></canvas>
+    <!-- Booth stage -->
+    <div id="booth-stage" aria-hidden="true">
+        <iframe id="booth-iframe" title="booth"></iframe>
+    </div>
+    <div id="stage-hint">ביתן פתוח • יציאה אוטומטית במסך שחור • ESC יציאה חירום</div>
+
+    <!-- ===== Booth HTMLs stored AS-IS in templates (do not edit) ===== -->
+    <template id="tpl-booth1"><script>
+  // Proxy sound + decision logging to parent
+  function playSound(name){ try{ parent.playSound && parent.playSound(name); }catch(e){} }
+  function __sendDecision(actionId){
+    try{
+      const node = document.querySelector(`[data-action="${actionId}"]`);
+      const labelNode = node ? (node.querySelector('.label') || node) : null;
+      const actionLabel = labelNode ? labelNode.textContent.trim() : String(actionId);
+      parent.postMessage({ type:"DECISION", boothId:"booth1", actionId:String(actionId), actionLabel }, "*");
+    }catch(e){}
+  }
+</script>
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lost & Found - Equal Choice</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Varela+Round&display=swap');
+
+        body { margin: 0; overflow: hidden; font-family: 'Varela Round', sans-serif; background-color: #222; user-select: none; }
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+        
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; display: flex; justify-content: center; align-items: center; }
+        
+        .modal { 
+            background: rgba(255, 252, 245, 0.98); 
+            padding: 40px; 
+            border-radius: 40px; 
+            text-align: center; 
+            box-shadow: 0 30px 70px rgba(0,0,0,0.6); 
+            pointer-events: auto; 
+            width: 90%; 
+            max-width: 700px;
+            border: 6px solid #DEB887; 
+            display: flex; 
+            flex-direction: column; 
+            gap: 20px; 
+        }
+
+        .choices-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 20px; 
+            width: 100%;
+        }
+
+        .choice-btn { 
+            background: white; 
+            border: 4px solid #E6E6FA; /* Uniform border color */
+            border-radius: 20px; 
+            padding: 20px 10px;
+            cursor: pointer; 
+            transition: all 0.2s ease; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            gap: 10px; 
+            box-shadow: 0 5px 15px rgba(0,0,0,0.05);
+            box-sizing: border-box;
+            position: relative;
+        }
+
+        .choice-btn.top-row { width: 30%; } 
+        .choice-btn.bottom-row { width: 45%; } 
+
+        /* Uniform Hover/Selection Style */
+        .choice-btn:hover, .choice-btn.selected { 
+            transform: translateY(-6px); 
+            border-color: #FFA07A; 
+            background-color: #FFFAF0; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15); 
+            z-index: 2;
+        }
+
+        .icon { font-size: 32px; } 
+        .label { font-size: 16px; color: #555; font-weight: bold; }
+
+        /* PHONE & TOAST */
+        #phone-container { position: absolute; bottom: -100%; left: 50%; transform: translateX(-50%); width: 300px; height: 550px; background: #1a1a1a; border-radius: 40px 40px 0 0; border: 8px solid #333; border-bottom: none; box-shadow: 0 0 50px rgba(0,0,0,0.5); z-index: 50; transition: bottom 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); display: flex; flex-direction: column; overflow: hidden; pointer-events: auto; }
+        #phone-container.active { bottom: 0; }
+        .phone-notch { width: 120px; height: 25px; background: #000; margin: 0 auto; border-radius: 0 0 15px 15px; position: absolute; left: 50%; transform: translateX(-50%); top: 0; z-index: 52; }
+        .phone-screen { flex: 1; background: #fff; padding: 40px 20px 20px 20px; font-family: sans-serif; display: none; flex-direction: column; }
+        .chat-header { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 20px; text-align: center; color: #333; font-weight: bold; }
+        .msg-bubble { background: #DCF8C6; padding: 12px; border-radius: 15px 15px 0 15px; align-self: flex-end; margin-bottom: 10px; max-width: 80%; }
+        .no-comments { margin-top: 30px; text-align: center; color: #999; font-style: italic; }
+        .call-content { align-items: center; justify-content: center; height: 100%; display: flex; flex-direction: column; text-align: center; }
+        .alert-icon { font-size: 60px; color: #ff4444; margin-bottom: 20px; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.1); } 100% { transform: scale(1); } }
+        
+        #toast { position: absolute; top: 60px; background: rgba(255, 255, 255, 0.95); padding: 15px 40px; border-radius: 50px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); font-size: 20px; color: #5D4037; font-weight: bold; transform: translateY(-150px); transition: transform 0.5s ease; z-index: 30; border: 3px solid #DEB887; text-align: center; width: auto; max-width: 80%; }
+        #toast.show { transform: translateY(0); }
+        
+        #start-screen { background: linear-gradient(135deg, #FFEFD5 0%, #DEB887 100%); position: absolute; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 20; pointer-events: auto; text-align: center; color: #5D4037; }
+        .start-btn { padding: 15px 50px; font-size: 22px; background: #FF7F50; border: none; border-radius: 50px; color: white; cursor: pointer; font-weight: bold; box-shadow: 0 6px 20px rgba(255, 127, 80, 0.4); margin-top: 30px; }
+        .start-btn.selected { transform: scale(1.1); box-shadow: 0 0 20px #fff; }
+        
+        #controls-hint { position: absolute; bottom: 30px; width: 100%; text-align: center; color: rgba(255,255,255,0.7); font-size: 18px; font-weight: bold; z-index: 5; text-shadow: 0 2px 4px rgba(0,0,0,0.8); }
+        .hidden { display: none !important; }
+        #end-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); color: white; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; opacity: 0; pointer-events: none; transition: opacity 1s; }
+        #end-overlay.visible { opacity: 1; pointer-events: auto; }
+    </style>
+    <script type="importmap"> { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } } </script>
+</head>
+<body>
+    <div id="start-screen">
+        <h1 style="font-size: 40px; margin-bottom: 10px;">אבידות ומציאות</h1>
+        <p style="font-size: 18px;">שליטה מלאה במקלדת (חצים + ENTER)</p>
+        <button class="start-btn selected" id="btn-start">התחל משחק (ENTER)</button>
+    </div>
+
+    <div id="end-overlay">
+        <h1 id="end-title" style="font-size: 48px;">המשחק הסתיים</h1>
+        <p id="end-desc" style="font-size: 24px;">לקחת את הארנק לעצמך.</p>
+        <button class="start-btn" onclick="location.reload()">התחל מחדש</button>
+    </div>
+
+    <div id="ui-layer">
+        <div id="toast">הודעה</div>
+        
+        <div id="choice-modal" class="modal hidden">
+            <h2 style="margin:0; font-size: 36px; color: #5D4037;">מצאת ארנק</h2>
+            <p style="margin:0; color:#888; font-size: 22px;">השתמשו בחצים לבחירה וב-ENTER לאישור</p>
+            
+            <div class="choices-container">
+                <div class="choice-btn top-row" data-action="ask">
+                    <div class="icon">🗣️</div><div class="label">לשאול את הבחור</div>
+                </div>
+                 <div class="choice-btn top-row" data-action="take">
+                    <div class="icon">🤫</div><div class="label">לקחת לעצמי</div>
+                </div>
+                <div class="choice-btn top-row" data-action="document">
+                    <div class="icon">📷</div><div class="label">לצלם ולדווח</div>
+                </div>
+                
+                <div class="choice-btn bottom-row" data-action="help">
+                    <div class="icon">🆘</div><div class="label">לקרוא לעזרה</div>
+                </div>
+                <div class="choice-btn bottom-row" data-action="away">
+                    <div class="icon">🚶</div><div class="label">להתרחק</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="phone-container"><div class="phone-notch"></div><div id="view-chat" class="phone-screen" style="display:none;"><div class="chat-header">קבוצת השכונה 🏠</div><div class="msg-bubble"><div>מצאתי ארנק! של מי זה? 👛</div></div><div class="no-comments" style="margin-top:20px;">ממתין לתגובות...</div><div class="no-comments" style="font-weight:bold;">0 תגובות</div></div><div id="view-call" class="phone-screen" style="display:none;"><div class="call-content"><div class="alert-icon">⚠️</div><div class="call-status">הדיווח התקבל</div><p>ניידת נשלחה למקום</p><div class="call-time">צפי הגעה: 2 שעות</div></div></div></div>
+    
+    <div id="controls-hint">תנועה: חצים | אישור: ENTER</div>
+    <div id="canvas-container"></div>
+<script type="module">
+
+// ---- SAFE AUDIO CONTEXT (shared, avoids redeclare & srcdoc errors)
+window.__parkAudioCtx = window.__parkAudioCtx || null;
+function getAudioCtx(){
+  if(!window.__parkAudioCtx){
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if(Ctx) window.__parkAudioCtx = new Ctx();
+  }
+  return window.__parkAudioCtx;
+}
+
+    import * as THREE from 'three';
+
+    // --- AUDIO ---
+let _audioCtx = null;
+let _masterGain = null;
+let _ambient = {src:null, gain:null, oscA:null, oscB:null, lfo:null, started:false};
+
+function ensureAudio(){
+  try{
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if(!AC) return null;
+    if(!_audioCtx) _audioCtx = new AC();
+    if(_audioCtx.state === 'suspended') _audioCtx.resume();
+    if(!_masterGain){
+      _masterGain = _audioCtx.createGain();
+      _masterGain.gain.value = 0.28;
+      _masterGain.connect(_audioCtx.destination);
+    }
+    return _audioCtx;
+  }catch(e){ return null; }
+}
+
+function startAmbientMusic(){
+  const ctx = ensureAudio();
+  if(!ctx || _ambient.started) return;
+  _ambient.started = true;
+
+  const g = ctx.createGain();
+  g.gain.value = 0.06;  // very subtle
+  g.connect(_masterGain);
+
+  // A soft 2-osc pad + gentle LFO for movement
+  const o1 = ctx.createOscillator(); o1.type='sine';
+  const o2 = ctx.createOscillator(); o2.type='triangle';
+  const lfo = ctx.createOscillator(); lfo.type='sine';
+  const lfoGain = ctx.createGain(); lfoGain.gain.value = 6; // detune cents
+  lfo.connect(lfoGain); lfoGain.connect(o2.detune);
+
+  o1.connect(g); o2.connect(g);
+
+  const base = 110; // A2
+  const chords = [
+    [base*1.0, base*1.25],      // A + C#
+    [base*0.89, base*1.12],     // G + B
+    [base*0.75, base*1.0],      // E + A
+    [base*0.84, base*1.06],     // F# + A#
+  ];
+  let ci = 0;
+  function setChord(i){
+    const [f1,f2]=chords[i%chords.length];
+    o1.frequency.setTargetAtTime(f1, ctx.currentTime, 0.2);
+    o2.frequency.setTargetAtTime(f2, ctx.currentTime, 0.2);
+  }
+  setChord(ci);
+
+  o1.start(); o2.start(); lfo.start();
+  _ambient = {gain:g, oscA:o1, oscB:o2, lfo:lfo, started:true};
+
+  setInterval(()=>{ try{ ci=(ci+1)%chords.length; setChord(ci);}catch(e){} }, 12000);
+}
+
+function playSound(name='click'){
+  const ctx = ensureAudio();
+  if(!ctx) return;
+
+  // ensure ambient starts once user is interacting
+  startAmbientMusic();
+
+  const t = ctx.currentTime;
+  const o = ctx.createOscillator();
+  const g = ctx.createGain();
+  o.connect(g); g.connect(_masterGain);
+
+  // Tiny palette
+  if(name==='click'){ o.type='square'; o.frequency.setValueAtTime(520,t); g.gain.setValueAtTime(0.08,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.08); }
+  else if(name==='step'){ o.type='sine'; o.frequency.setValueAtTime(160,t); g.gain.setValueAtTime(0.06,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.10); }
+  else if(name==='success'){ o.type='triangle'; o.frequency.setValueAtTime(740,t); g.gain.setValueAtTime(0.08,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.16); }
+  else if(name==='error'){ o.type='sawtooth'; o.frequency.setValueAtTime(180,t); g.gain.setValueAtTime(0.07,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.20); }
+  else { o.type='sine'; o.frequency.setValueAtTime(440,t); g.gain.setValueAtTime(0.05,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.12); }
+
+  o.start(t);
+  o.stop(t+0.25);
+}
+
+// Kick audio resume/ambient on first gesture
+window.addEventListener('pointerdown', ()=>{ ensureAudio(); startAmbientMusic(); }, {once:false});
+window.addEventListener('keydown', ()=>{ ensureAudio(); startAmbientMusic(); }, {once:false});
+
+// --- SCENE SETUP ---
+    const scene = new THREE.Scene(); scene.background = new THREE.Color(0xF5F5DC); scene.fog = new THREE.Fog(0xF5F5DC, 2, 22);
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.5, 100);
+    const renderer = new THREE.WebGLRenderer({antialias:true});
+    renderer.setSize(window.innerWidth, window.innerHeight); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+    // --- WORLD & MATERIALS ---
+    const mats = { 
+        wall: new THREE.MeshStandardMaterial({color: 0xFFE4C4}), 
+        floor: new THREE.MeshStandardMaterial({color: 0xFFE4C4}), 
+        carpet: new THREE.MeshStandardMaterial({color: 0xD2691E}), 
+        hoodie: new THREE.MeshStandardMaterial({color: 0x6495ED}), 
+        pants: new THREE.MeshStandardMaterial({color: 0x2F4F4F}), 
+        skin: new THREE.MeshBasicMaterial({color: 0xFFDAB9}), 
+        wallet: new THREE.MeshStandardMaterial({color: 0xFFA500}), 
+        wood: new THREE.MeshStandardMaterial({color: 0x8B4513}),
+        plant: new THREE.MeshStandardMaterial({color: 0x556B2F}),
+        pot: new THREE.MeshStandardMaterial({color: 0x8B4513})
+    };
+    
+    const room = new THREE.Group();
+    const walls = new THREE.Mesh(new THREE.BoxGeometry(8, 5, 25), mats.wall); walls.material.side = THREE.BackSide; walls.position.y = 2.5; walls.receiveShadow = true;
+    const floorGeo = new THREE.BoxGeometry(8, 0.5, 25); const floor = new THREE.Mesh(floorGeo, mats.floor); floor.position.y = -0.25; floor.receiveShadow = true;
+    const carpetGeo = new THREE.BoxGeometry(2.5, 0.05, 20); const carpet = new THREE.Mesh(carpetGeo, mats.carpet); carpet.position.y = 0.025; carpet.receiveShadow = true; 
+    room.add(walls, floor, carpet); scene.add(room);
+    
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const mainLight = new THREE.PointLight(0xFFD700, 0.8, 20); mainLight.position.set(0, 5, 4); mainLight.castShadow = true; 
+    mainLight.shadow.bias = -0.0005; mainLight.shadow.mapSize.width = 2048; mainLight.shadow.mapSize.height = 2048; scene.add(mainLight);
+
+    // SHELVES WITH PLANTS
+    function createShelf(x,y,z) { 
+        const s = new THREE.Mesh(new THREE.BoxGeometry(2, 0.1, 0.6), mats.wood); s.position.set(x,y,z); s.castShadow=true; scene.add(s); 
+        // Books
+        for(let i=0; i<3; i++){
+            const b = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.3+Math.random()*0.2, 0.4), new THREE.MeshStandardMaterial({color: Math.random()*0xffffff}));
+            b.position.set(x-0.8+i*0.2, y+0.25, z); b.castShadow=true; scene.add(b);
+        }
+        // Plant
+        const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.1, 0.25, 8), mats.pot);
+        pot.position.set(x+0.5, y+0.18, z); pot.castShadow = true; scene.add(pot);
+        const cactus = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 8), mats.plant);
+        cactus.position.set(x+0.5, y+0.35, z); cactus.castShadow = true; scene.add(cactus);
+    }
+    createShelf(3, 1.5, -5); createShelf(-3, 2, -2);
+
+    // NPC
+    const npc = new THREE.Group();
+    const lLeg = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.7), mats.pants); lLeg.position.set(-0.25, 0.35, 0);
+    const rLeg = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.7), mats.pants); rLeg.position.set(0.25, 0.35, 0);
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.55, 16, 16), mats.hoodie); body.position.y = 1.0; body.scale.y = 1.1;
+    const head = new THREE.Group(); head.position.y = 1.65;
+    const hood = new THREE.Mesh(new THREE.SphereGeometry(0.6, 16, 16), mats.hoodie);
+    const face = new THREE.Mesh(new THREE.SphereGeometry(0.45, 16, 16), mats.skin); face.position.z = 0.16;
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.06), new THREE.MeshBasicMaterial({color:0x222}));
+    const e1=eye.clone(); e1.position.set(-0.18, 0.1, 0.46); const e2=eye.clone(); e2.position.set(0.18, 0.1, 0.46);
+    face.add(e1,e2); head.add(hood, face);
+    const armGeo = new THREE.CapsuleGeometry(0.15, 0.55);
+    const lArm = new THREE.Mesh(armGeo, mats.hoodie); lArm.position.set(-0.65, 1.2, 0);
+    const rArm = new THREE.Mesh(armGeo, mats.hoodie); rArm.position.set(0.65, 1.2, 0);
+    npc.add(lLeg, rLeg, body, head, lArm, rArm); npc.position.set(2, 0, -6); npc.rotation.y = Math.PI;
+    lArm.rotation.x = -Math.PI/4; rArm.rotation.x = -Math.PI/4; npc.traverse(o=>{if(o.isMesh)o.castShadow=true;}); scene.add(npc);
+
+    const wallet = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.15, 0.3), mats.wallet); wallet.position.set(0, 0.1, -3); wallet.castShadow = true; scene.add(wallet);
+
+    // --- GAME LOGIC & KEYBOARD CONTROL ---
+    let state = 'start'; 
+    let player = { x: 0, z: 9, rot: 0 };
+    let cooldown = 0;
+    
+    const keys = {};
+    let menuSelectionIndex = 0;
+    
+    window.addEventListener('keydown', (e) => {
+        keys[e.key] = true;
+        if (e.key === 'Enter') {
+            if (state === 'start') {
+                document.getElementById('start-screen').classList.add('hidden');
+                state = 'playing';
+            } else if (state === 'menu') {
+                const buttons = document.querySelectorAll('.choice-btn');
+                const action = buttons[menuSelectionIndex].dataset.action;
+                document.getElementById('choice-modal').classList.add('hidden');
+                handleAction(action);
+            } else if (state === 'resolved') {
+                location.reload();
+            }
+        }
+        if (state === 'menu') {
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+                menuSelectionIndex++; if (menuSelectionIndex > 4) menuSelectionIndex = 0;
+                updateMenuHighlight(); playSound('ui_move');
+            } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+                menuSelectionIndex--; if (menuSelectionIndex < 0) menuSelectionIndex = 4;
+                updateMenuHighlight(); playSound('ui_move');
+            }
+        }
+    });
+
+    window.addEventListener('keyup', (e) => keys[e.key] = false);
+
+    document.getElementById('btn-start').onclick = () => { document.getElementById('start-screen').classList.add('hidden'); state = 'playing'; };
+
+    function updateMenuHighlight() {
+        const buttons = document.querySelectorAll('.choice-btn');
+        buttons.forEach(b => b.classList.remove('selected'));
+        buttons[menuSelectionIndex].classList.add('selected');
+    }
+
+    function showToast(msg) {
+        const t = document.getElementById('toast');
+        t.innerText = msg; t.classList.add('show');
+        setTimeout(() => t.classList.remove('show'), 3500);
+    }
+
+    function showPhone(viewId) {
+        state = 'phone_anim';
+        const c = document.getElementById('phone-container');
+        document.querySelectorAll('.phone-screen').forEach(v => v.style.display = 'none');
+        document.getElementById(viewId).style.display = 'flex';
+        c.classList.add('active'); playSound('zip');
+        setTimeout(() => {
+            c.classList.remove('active');
+            setTimeout(() => {
+                state = 'playing'; player.z += 2; cooldown = 2;
+                showToast("עדיין לא פתרת את הבעיה. נסה אפשרות אחרת.");
+            }, 600);
+        }, 4000);
+    }
+
+    document.querySelectorAll('.choice-btn').forEach((btn, index) => {
+        btn.addEventListener('mouseenter', () => { if (state === 'menu') { menuSelectionIndex = index; updateMenuHighlight(); } });
+        btn.onclick = () => { document.getElementById('choice-modal').classList.add('hidden'); handleAction(btn.dataset.action); };
+    });
+
+    function handleAction(type){
+        __sendDecision(type);
+        if (type === 'ask') {
+            state = 'animating'; showToast("שאלת אם הארנק שלו..."); playSound('success');
+            let p = 0; const startRot = npc.rotation.y;
+            const int = setInterval(() => {
+                p += 0.02; npc.rotation.y = THREE.MathUtils.lerp(startRot, -Math.PI/6, p);
+                if (p > 0.5) { rArm.rotation.x = -Math.PI/1.2; rArm.rotation.z = Math.sin(Date.now()*0.015)*0.5 + 0.3; }
+                wallet.position.lerp(new THREE.Vector3(1.5, 1.0, -5), 0.05);
+                if (p >= 1 && p < 1.02) showToast("זה שלו! הוא שמח מאוד.");
+                if (p > 5) { clearInterval(int); document.getElementById('end-overlay').classList.add('visible'); state = 'resolved'; }
+            }, 16);
+        } else if (type === 'take') {
+            state = 'animating'; playSound('zip');
+            let p = 0; const targetPos = new THREE.Vector3(player.x, 1.3, player.z - 1.0);
+            const int = setInterval(() => {
+                p += 0.015;
+                if (p < 0.4) { wallet.position.lerp(targetPos, 0.1); wallet.rotation.x = THREE.MathUtils.lerp(0, 0.5, p*2.5); }
+                else if (p < 0.8) { wallet.rotation.y += 0.05; }
+                else if (p < 1.3) { wallet.position.y -= 0.1; wallet.position.z += 0.05; wallet.scale.multiplyScalar(0.9); }
+                else { clearInterval(int); wallet.visible = false; document.getElementById('end-overlay').classList.add('visible'); state = 'resolved'; }
+            }, 16);
+        } else if (type === 'document') showPhone('view-chat');
+        else if (type === 'help') showPhone('view-call');
+        else if (type === 'away') { state = 'playing'; player.z += 3; cooldown = 2; showToast("התרחקת מהאזור."); }
+    }
+
+    const clock = new THREE.Clock();
+    function update(dt) {
+        if (state === 'playing') {
+            if (keys.ArrowLeft) player.rot += 2.5 * dt; if (keys.ArrowRight) player.rot -= 2.5 * dt;
+            const dx = Math.sin(player.rot), dz = Math.cos(player.rot);
+            if (keys.ArrowUp) { player.x -= dx * 4 * dt; player.z -= dz * 4 * dt; }
+            if (keys.ArrowDown) { player.x += dx * 4 * dt; player.z += dz * 4 * dt; }
+            player.x = Math.max(-3.5, Math.min(3.5, player.x)); player.z = Math.max(-9, Math.min(10, player.z));
+            camera.position.y = 1.6 + Math.sin(Date.now() * 0.005) * 0.05;
+            if (cooldown > 0) cooldown -= dt;
+            if (Math.hypot(player.x - wallet.position.x, player.z - wallet.position.z) < 2.0 && cooldown <= 0) {
+                state = 'menu'; menuSelectionIndex = 0; updateMenuHighlight();
+                document.getElementById('choice-modal').classList.remove('hidden');
+            }
+        }
+        camera.position.x = player.x; camera.position.z = player.z; camera.rotation.y = player.rot;
+    }
+
+    function animate() { requestAnimationFrame(animate); update(clock.getDelta()); renderer.render(scene, camera); }
+    window.onresize = () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); };
+    animate();
+
+    // Expose a few helpers globally (this file mixes module + non-module scripts)
+    window.playSound = playSound;
+    // Dashboard bridge to parent (single-file build uses iframes for booths)
+    window.openDashboard = window.openDashboard || function(){
+      try {
+        if (window.parent && window.parent.openDashboard) return window.parent.openDashboard();
+        if (window.parent) window.parent.postMessage({type:'OPEN_DASHBOARD'}, '*');
+      } catch(e) {}
+    };
+    window.closeDashboard = window.closeDashboard || function(){
+      try {
+        if (window.parent && window.parent.closeDashboard) return window.parent.closeDashboard();
+        if (window.parent) window.parent.postMessage({type:'CLOSE_DASHBOARD'}, '*');
+      } catch(e) {}
+    };
+</script>
+</body>
+</html></template>
+    <template id="tpl-booth2"><script>
+  // Proxy sound + decision logging to parent
+  function playSound(name){ try{ parent.playSound && parent.playSound(name); }catch(e){} }
+  function __sendDecision(actionId){
+    try{
+      const node = document.querySelector(`[data-action="${actionId}"]`);
+      const labelNode = node ? (node.querySelector('.label') || node) : null;
+      const actionLabel = labelNode ? labelNode.textContent.trim() : String(actionId);
+      parent.postMessage({ type:"DECISION", boothId:"booth2", actionId:String(actionId), actionLabel }, "*");
+    }catch(e){}
+  }
+</script>
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Hallway - Keyboard Edition</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Varela+Round&display=swap');
+
+        body { margin: 0; overflow: hidden; font-family: 'Varela Round', sans-serif; background-color: #1a1a1a; user-select: none; }
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; display: flex; justify-content: center; align-items: center; }
+        
+        /* Pastel Modal */
+        .modal { 
+            background: rgba(248, 250, 255, 0.98); 
+            padding: 40px 50px; 
+            border-radius: 40px; 
+            text-align: center; 
+            box-shadow: 0 30px 80px rgba(70, 70, 100, 0.3); 
+            pointer-events: auto; 
+            width: 90%; max-width: 650px;
+            border: 6px solid #B0C4DE; 
+            display: flex; flex-direction: column; gap: 25px; 
+        }
+
+        .choices-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; width: 100%; }
+
+        .choice-btn { 
+            background: white; border: 3px solid #E6E6FA; border-radius: 25px; padding: 20px 30px; 
+            cursor: pointer; transition: all 0.2s ease; display: flex; flex-direction: column; align-items: center; gap: 10px; min-width: 130px;
+        }
+        
+        /* Highlight style for Keyboard Selection */
+        .choice-btn.selected, .choice-btn:hover { 
+            transform: translateY(-5px); 
+            border-color: #87CEEB; 
+            background-color: #F0F8FF; 
+            box-shadow: 0 10px 25px rgba(135, 206, 235, 0.4); 
+            border-width: 4px;
+        }
+        
+        .choice-btn.ignore { opacity: 0.8; border-color: #eee; }
+        .choice-btn.ignore.selected { opacity: 1; border-color: #ccc; background-color: #f9f9f9; }
+
+        .icon { font-size: 36px; } .label { font-size: 18px; color: #555; font-weight: bold; }
+
+        /* PHONE */
+        #phone-container { position: absolute; bottom: -100%; left: 50%; transform: translateX(-50%); width: 300px; height: 550px; background: #1a1a1a; border-radius: 40px 40px 0 0; border: 8px solid #333; border-bottom: none; box-shadow: 0 0 50px rgba(0,0,0,0.5); z-index: 50; transition: bottom 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); display: flex; flex-direction: column; overflow: hidden; pointer-events: auto; }
+        #phone-container.active { bottom: 0; }
+        .phone-notch { width: 120px; height: 25px; background: #000; margin: 0 auto; border-radius: 0 0 15px 15px; position: absolute; left: 50%; transform: translateX(-50%); top: 0; z-index: 52; }
+        .phone-screen { flex: 1; background: #fff; padding: 40px 20px; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+        .call-anim { width: 90px; height: 90px; background: #ff5555; border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 32px; margin-bottom: 20px; animation: pulsePhone 1.5s infinite; }
+        @keyframes pulsePhone { 0% { box-shadow: 0 0 0 0 rgba(255, 85, 85, 0.7); } 70% { box-shadow: 0 0 0 25px rgba(255, 85, 85, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 85, 85, 0); } }
+
+        /* Toast */
+        #toast { position: absolute; top: 60px; background: rgba(255, 255, 255, 0.95); padding: 15px 40px; border-radius: 50px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); font-size: 20px; color: #4a5f7a; font-weight: bold; transform: translateY(-150px); transition: transform 0.5s ease; z-index: 30; border: 3px solid #B0C4DE; }
+        #toast.show { transform: translateY(0); }
+        
+        #start-screen { background: linear-gradient(135deg, #E6E6FA 0%, #B0C4DE 100%); position: absolute; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 20; pointer-events: auto; text-align: center; color: #4a5f7a; }
+        .start-btn { padding: 15px 60px; font-size: 24px; background: #87CEEB; border: none; border-radius: 50px; color: white; cursor: pointer; font-weight: bold; box-shadow: 0 6px 20px rgba(135, 206, 235, 0.4); margin-top: 30px; transition: transform 0.2s; }
+        .start-btn.selected { transform: scale(1.1); box-shadow: 0 0 25px #fff; border: 2px solid white; }
+        
+        #end-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(25, 25, 35, 0.95); color: white; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; opacity: 0; pointer-events: none; transition: opacity 1s; }
+        #end-overlay.visible { opacity: 1; pointer-events: auto; }
+        
+        #controls-hint { position: absolute; bottom: 30px; width: 100%; text-align: center; color: rgba(100,100,120,0.6); font-size: 18px; font-weight: bold; z-index: 5; }
+        .hidden { display: none !important; }
+    </style>
+    <script type="importmap"> { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } } </script>
+</head>
+<body>
+    <div id="start-screen">
+        <h1 style="font-size: 40px; margin-bottom: 10px;">דירה 4</h1>
+        <p style="font-size: 18px;">שליטה במקלדת: חצים ו-ENTER</p>
+        <button class="start-btn selected" id="btn-start">התחל (ENTER)</button>
+    </div>
+
+    <div id="end-overlay">
+        <h1 id="end-title" style="font-size: 48px;">סוף</h1>
+        <p id="end-desc" style="font-size: 24px;">...</p>
+        <button class="start-btn selected" id="btn-restart" onclick="location.reload()">שחק שוב (ENTER)</button>
+    </div>
+
+    <div id="ui-layer">
+        <div id="toast">הודעה</div>
+        <div id="choice-modal" class="modal hidden">
+            <h2 style="margin:0; font-size: 32px; color: #4a5f7a;">רעשים מאחורי הדלת</h2>
+            <p style="margin:0; color:#778899; font-size: 18px;">השתמשו בחצים לבחירה, ENTER לאישור.</p>
+            <div class="choices-grid">
+                <div class="choice-btn" data-action="knock"><div class="icon">✊</div><div class="label">לדפוק</div></div>
+                <div class="choice-btn" data-action="listen"><div class="icon">👂</div><div class="label">להקשיב</div></div>
+                <div class="choice-btn" data-action="call"><div class="icon">🚓</div><div class="label">משטרה</div></div>
+                <div class="choice-btn ignore" data-action="ignore"><div class="icon">🏃‍♀️</div><div class="label">לברוח</div></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="phone-container">
+        <div class="phone-notch"></div>
+        <div class="phone-screen">
+            <div class="call-anim">100</div>
+            <h2 style="color:#333; margin:0;">מחייג לחירום...</h2>
+            <p style="color:#666;">דיווח על חשד לאלימות</p>
+        </div>
+    </div>
+
+    <div id="controls-hint">חצים לתנועה</div>
+    <div id="canvas-container"></div>
+<script type="module">
+    import * as THREE from 'three';
+
+    // --- ROBUST AUDIO ENGINE ---
+    class SoundSystem {
+        constructor() {
+            this.ctx = null;
+            this.masterGain = null;
+            this.voiceOsc = null;
+            this.voiceGain = null;
+            this.lfo = null;
+            this.isPlaying = false;
+        }
+
+        init() {
+            if (this.ctx) return;
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            this.ctx = new AudioContext();
+            this.masterGain = this.ctx.createGain();
+            this.masterGain.connect(this.ctx.destination);
+            this.setupAmbience();
+            this.isPlaying = true;
+        }
+
+        setupAmbience() {
+            this.voiceOsc = this.ctx.createOscillator();
+            this.voiceOsc.type = 'sawtooth';
+            this.voiceOsc.frequency.value = 150;
+            this.lfo = this.ctx.createOscillator();
+            this.lfo.type = 'sine';
+            this.lfo.frequency.value = 4;
+            const lfoGain = this.ctx.createGain();
+            lfoGain.gain.value = 100;
+            this.lfo.connect(lfoGain);
+            lfoGain.connect(this.voiceOsc.frequency);
+            const filter = this.ctx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 300;
+            this.voiceGain = this.ctx.createGain();
+            this.voiceGain.gain.value = 0.0;
+            this.voiceOsc.connect(filter);
+            filter.connect(this.voiceGain);
+            this.voiceGain.connect(this.masterGain);
+            this.voiceOsc.start();
+            this.lfo.start();
+        }
+
+        setProximity(dist) {
+            if (!this.ctx) return;
+            const maxDist = 12;
+            let vol = 1 - (Math.min(dist, maxDist) / maxDist);
+            vol = Math.pow(vol, 2);
+            const jitter = 0.8 + Math.sin(this.ctx.currentTime * 2) * 0.2;
+            this.voiceGain.gain.setTargetAtTime(vol * 0.8 * jitter, this.ctx.currentTime, 0.1);
+        }
+
+        boostVolumeTemporarily() {
+            if (!this.ctx) return;
+            const current = this.voiceGain.gain.value;
+            this.voiceGain.gain.cancelScheduledValues(this.ctx.currentTime);
+            this.voiceGain.gain.setValueAtTime(current, this.ctx.currentTime);
+            this.voiceGain.gain.linearRampToValueAtTime(1.5, this.ctx.currentTime + 0.5);
+            this.voiceGain.gain.linearRampToValueAtTime(current, this.ctx.currentTime + 3.0);
+        }
+
+        playKnock() {
+            if (!this.ctx) return;
+            const t = this.ctx.currentTime;
+            for(let i=0; i<3; i++) {
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.frequency.setValueAtTime(200, t + i*0.4);
+                osc.frequency.exponentialRampToValueAtTime(50, t + i*0.4 + 0.1);
+                gain.gain.setValueAtTime(0, t + i*0.4);
+                gain.gain.linearRampToValueAtTime(1.0, t + i*0.4 + 0.02);
+                gain.gain.exponentialRampToValueAtTime(0.01, t + i*0.4 + 0.15);
+                osc.connect(gain);
+                gain.connect(this.masterGain);
+                osc.start(t + i*0.4);
+                osc.stop(t + i*0.4 + 0.2);
+            }
+        }
+
+        playSiren() {
+            if (!this.ctx) return;
+            const t = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator();
+            const g = this.ctx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(600, t);
+            osc.frequency.linearRampToValueAtTime(900, t + 0.6);
+            osc.frequency.linearRampToValueAtTime(600, t + 1.2);
+            osc.frequency.linearRampToValueAtTime(900, t + 1.8);
+            osc.frequency.linearRampToValueAtTime(600, t + 2.4);
+            g.gain.value = 0.2;
+            osc.connect(g); g.connect(this.masterGain);
+            osc.start(); osc.stop(t+3);
+        }
+        
+        playUI() {
+             if (!this.ctx) return;
+             const t = this.ctx.currentTime;
+             const osc = this.ctx.createOscillator();
+             const g = this.ctx.createGain();
+             osc.frequency.setValueAtTime(400, t);
+             g.gain.setValueAtTime(0.05, t);
+             g.gain.linearRampToValueAtTime(0, t+0.05);
+             osc.connect(g); g.connect(this.masterGain);
+             osc.start(); osc.stop(t+0.1);
+        }
+    }
+    const audio = new SoundSystem();
+
+    // --- VISUALS ---
+    const scene = new THREE.Scene(); scene.background = new THREE.Color(0xDCEEF4); 
+    scene.fog = new THREE.Fog(0xDCEEF4, 1, 18);
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
+    const renderer = new THREE.WebGLRenderer({antialias:true});
+    renderer.setSize(window.innerWidth, window.innerHeight); renderer.shadowMap.enabled = true;
+    document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+    const mats = {
+        wall: new THREE.MeshStandardMaterial({color: 0xB0C4DE}), 
+        floor: new THREE.MeshStandardMaterial({color: 0xFFFFF0}),
+        door: new THREE.MeshStandardMaterial({color: 0xF5F5DC}),
+        rug: new THREE.MeshStandardMaterial({color: 0xD2B48C}),
+        plant: new THREE.MeshStandardMaterial({color: 0x8FBC8F}),
+        cop: new THREE.MeshStandardMaterial({color: 0x1E90FF}),
+        skin: new THREE.MeshBasicMaterial({color: 0xFFDAB9})
+    };
+
+    const room = new THREE.Group();
+    const wL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 5, 30), mats.wall); wL.position.set(-2.25, 2.5, 0); wL.receiveShadow=true;
+    const wR = new THREE.Mesh(new THREE.BoxGeometry(0.5, 5, 30), mats.wall); wR.position.set(2.25, 2.5, 0); wR.receiveShadow=true;
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(5, 0.5, 30), mats.floor); floor.position.y = -0.25; floor.receiveShadow=true;
+    const wBack = new THREE.Mesh(new THREE.BoxGeometry(5, 5, 0.5), mats.wall); wBack.position.set(0, 2.5, -10); wBack.receiveShadow=true;
+    room.add(wL, wR, floor, wBack); scene.add(room);
+
+    const doorGrp = new THREE.Group(); doorGrp.position.set(0, 0, -9.7);
+    const dBase = new THREE.Mesh(new THREE.BoxGeometry(2.5, 3, 0.2), mats.door); dBase.position.y=1.5;
+    const dTop = new THREE.Mesh(new THREE.CylinderGeometry(1.25, 1.25, 0.2, 32), mats.door); dTop.rotation.x=Math.PI/2; dTop.position.y=3;
+    doorGrp.add(dBase, dTop); doorGrp.traverse(o=>{if(o.isMesh)o.castShadow=true;}); scene.add(doorGrp);
+
+    const rug = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 0.05, 32), mats.rug);
+    rug.position.set(0, 0.025, -8.5); rug.receiveShadow=true; scene.add(rug);
+
+    const pot = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.2, 0.4), new THREE.MeshStandardMaterial({color:0x8B4513}));
+    pot.position.set(-1.5, 0.2, -9); pot.castShadow=true; scene.add(pot);
+    const leaves = new THREE.Mesh(new THREE.DodecahedronGeometry(0.3), mats.plant);
+    leaves.position.set(-1.5, 0.6, -9); leaves.castShadow=true; scene.add(leaves);
+
+    const handGroup = new THREE.Group();
+    const handMesh = new THREE.Mesh(new THREE.SphereGeometry(0.15), mats.skin);
+    handGroup.add(handMesh); handGroup.position.set(0.5, -0.3, -0.5); handGroup.visible = false;
+    camera.add(handGroup); scene.add(camera);
+
+    const light = new THREE.PointLight(0xFFFDD0, 1.2, 10); light.position.set(0, 3, -8); light.castShadow=true; scene.add(light);
+    const leak = new THREE.PointLight(0xFFA500, 2, 5); leak.position.set(0, 0.1, -10.2); scene.add(leak);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+
+    const police = new THREE.Group();
+    function createCop(x) {
+        const c = new THREE.Group();
+        const b = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 1), mats.cop); b.position.y=0.8;
+        const h = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.35, 0.1), new THREE.MeshStandardMaterial({color:0x000080})); h.position.y=1.5;
+        c.add(b, h); c.position.x = x; return c;
+    }
+    police.add(createCop(-0.8), createCop(0.8));
+    police.position.set(0, 0, 12); scene.add(police);
+
+    // --- GAME LOGIC & KEYBOARD ---
+    let state = 'start';
+    let player = { x: 0, z: 8, rot: 0 };
+    let cooldown = 0;
+    let menuIndex = 0;
+    
+    // Keyboard Input System
+    const keys = {};
+    window.addEventListener('keydown', (e) => {
+        keys[e.key] = true;
+        
+        // ENTER Interactions
+        if (e.key === 'Enter') {
+            if (state === 'start') {
+                document.getElementById('start-screen').classList.add('hidden');
+                state = 'playing';
+                audio.init();
+            } else if (state === 'menu') {
+                // Select Option
+                const buttons = document.querySelectorAll('.choice-btn');
+                const action = buttons[menuIndex].dataset.action;
+                document.getElementById('choice-modal').classList.add('hidden');
+                handleAction(action);
+            } else if (state === 'resolved') {
+                location.reload();
+            }
+        }
+
+        // MENU Navigation
+        if (state === 'menu') {
+            if (e.key === 'ArrowRight') {
+                menuIndex = (menuIndex + 1) % 4;
+                updateMenuUI();
+                audio.playUI();
+            }
+            if (e.key === 'ArrowLeft') {
+                menuIndex = (menuIndex + 3) % 4; // Previous
+                updateMenuUI();
+                audio.playUI();
+            }
+        }
+    });
+    
+    window.addEventListener('keyup', (e) => keys[e.key] = false);
+
+    // Mouse Fallback
+    document.getElementById('btn-start').onclick=()=>{
+        document.getElementById('start-screen').classList.add('hidden');
+        state = 'playing';
+        audio.init();
+    };
+
+    function updateMenuUI() {
+        const btns = document.querySelectorAll('.choice-btn');
+        btns.forEach(b => b.classList.remove('selected'));
+        btns[menuIndex].classList.add('selected');
+    }
+
+    function showToast(msg) {
+        const t = document.getElementById('toast'); t.innerText=msg; t.classList.add('show');
+        setTimeout(()=>t.classList.remove('show'), 2000);
+    }
+
+    function endGame(title, msg) {
+        setTimeout(()=>{
+            document.getElementById('end-title').innerText = title;
+            document.getElementById('end-desc').innerText = msg;
+            document.getElementById('end-overlay').classList.add('visible');
+            state = 'resolved';
+        }, 1000);
+    }
+
+    // Handle button clicks (mouse support)
+    document.querySelectorAll('.choice-btn').forEach((btn, idx) => {
+        btn.onmouseenter = () => { menuIndex = idx; updateMenuUI(); };
+        btn.onclick = () => {
+            document.getElementById('choice-modal').classList.add('hidden');
+            handleAction(btn.dataset.action);
+        };
+    });
+
+    function handleAction(type){
+        __sendDecision(type);
+        if(type === 'knock') {
+            state = 'animating';
+            handGroup.visible = true;
+            const kInt = setInterval(() => { handGroup.position.z = -0.5 - Math.sin(Date.now() * 0.02) * 0.2; }, 16);
+            audio.playKnock();
+            setTimeout(() => {
+                clearInterval(kInt);
+                handGroup.visible = false;
+                showToast("אין תשובה...");
+                setTimeout(() => { state='playing'; player.z += 2; cooldown=2; }, 1000);
+            }, 1200);
+        } else if(type === 'listen') {
+            audio.boostVolumeTemporarily();
+            showToast("זה נשמע כמו ויכוח סוער...");
+            state='playing'; cooldown=2;
+        } else if(type === 'ignore') {
+            state = 'resolved';
+            endGame("הלכת משם", "מקווה שהכל בסדר שם...");
+        } else if(type === 'call') {
+            state = 'animating';
+            const phone = document.getElementById('phone-container');
+            phone.classList.add('active');
+            setTimeout(() => {
+                phone.classList.remove('active');
+                state = 'turning';
+                const startRot = player.rot;
+                const targetRot = player.rot + Math.PI;
+                let progress = 0;
+                const turnInt = setInterval(() => {
+                    progress += 0.05;
+                    player.rot = THREE.MathUtils.lerp(startRot, targetRot, progress);
+                    if(progress >= 1) {
+                        clearInterval(turnInt);
+                        state = 'police_run';
+                        audio.playSiren();
+                    }
+                }, 30);
+            }, 3000);
+        }
+    }
+
+    const clock = new THREE.Clock();
+    
+    function update(dt) {
+        const dist = player.z - (-9);
+        if (state === 'playing' || state === 'menu') audio.setProximity(dist);
+
+        if (state === 'playing') {
+            if(keys.ArrowUp) player.z -= 3*dt;
+            if(keys.ArrowDown) player.z += 3*dt;
+            player.z = Math.max(-7, Math.min(10, player.z));
+            camera.position.y = 1.6 + Math.sin(Date.now()*0.008)*0.05;
+            if(cooldown > 0) cooldown -= dt;
+            if(player.z < -6 && cooldown <= 0) {
+                state = 'menu';
+                menuIndex = 0; updateMenuUI();
+                document.getElementById('choice-modal').classList.remove('hidden');
+            }
+        }
+
+        if (state === 'police_run') {
+            police.position.z -= 10 * dt; 
+            police.children.forEach((c, i) => { c.position.y = Math.abs(Math.sin(Date.now()*0.015 + i))*0.2; });
+            if(police.position.z < -5) {
+                state = 'resolved';
+                endGame("המשטרה הגיעה", "דיווחת בזמן.");
+            }
+        }
+        camera.position.x = player.x; camera.position.z = player.z; camera.rotation.y = player.rot;
+    }
+
+    function animate() { requestAnimationFrame(animate); update(clock.getDelta()); renderer.render(scene, camera); }
+    window.onresize = () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); };
+    animate();
+</script>
+</body>
+</html></template>
+    <template id="tpl-booth3"><script>
+  // Proxy sound + decision logging to parent
+  function playSound(name){ try{ parent.playSound && parent.playSound(name); }catch(e){} }
+  function __sendDecision(actionId){
+    try{
+      const node = document.querySelector(`[data-action="${actionId}"]`);
+      const labelNode = node ? (node.querySelector('.label') || node) : null;
+      const actionLabel = labelNode ? labelNode.textContent.trim() : String(actionId);
+      parent.postMessage({ type:"DECISION", boothId:"booth3", actionId:String(actionId), actionLabel }, "*");
+    }catch(e){}
+  }
+</script>
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Cozy Room - Final Emotions</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Varela+Round&display=swap');
+
+        body { margin: 0; overflow: hidden; font-family: 'Varela Round', sans-serif; background-color: #2a2320; user-select: none; }
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; display: flex; justify-content: center; align-items: center; }
+        
+        /* Modal */
+        .modal { 
+            background: rgba(255, 250, 245, 0.98); 
+            padding: 40px 50px; 
+            border-radius: 40px; 
+            text-align: center; 
+            box-shadow: 0 30px 80px rgba(100, 70, 50, 0.3); 
+            pointer-events: auto; 
+            width: 90%; max-width: 750px;
+            border: 6px solid #FFDAB9; 
+            display: flex; flex-direction: column; gap: 25px; 
+        }
+
+        .choices-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; width: 100%; }
+
+        .choice-btn { 
+            background: white; border: 3px solid #FFE4E1; border-radius: 25px; padding: 20px 20px; 
+            cursor: pointer; transition: all 0.2s ease; display: flex; flex-direction: column; align-items: center; gap: 10px; min-width: 120px; width: 18%;
+        }
+        
+        .choice-btn.selected, .choice-btn:hover { 
+            transform: translateY(-5px); border-color: #FFA07A; background-color: #FFF5EE; 
+            box-shadow: 0 10px 25px rgba(255, 160, 122, 0.4); border-width: 4px;
+        }
+
+        .icon { font-size: 32px; } .label { font-size: 16px; color: #555; font-weight: bold; }
+
+        /* PHONE OVERLAY */
+        #phone-container { position: absolute; bottom: -100%; left: 50%; transform: translateX(-50%); width: 320px; height: 600px; background: #1a1a1a; border-radius: 40px 40px 0 0; border: 8px solid #333; border-bottom: none; box-shadow: 0 0 50px rgba(0,0,0,0.5); z-index: 50; transition: bottom 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); display: flex; flex-direction: column; overflow: hidden; pointer-events: auto; }
+        #phone-container.active { bottom: 0; }
+        .phone-notch { width: 120px; height: 25px; background: #000; margin: 0 auto; border-radius: 0 0 15px 15px; position: absolute; left: 50%; transform: translateX(-50%); top: 0; z-index: 52; }
+        .phone-screen { flex: 1; background: #f0f0f0; padding: 50px 15px 20px 15px; font-family: sans-serif; display: flex; flex-direction: column; gap: 15px; }
+        
+        .chat-msg { padding: 12px 15px; border-radius: 15px; max-width: 80%; font-size: 14px; position: relative; opacity: 0; transform: translateY(20px); transition: all 0.3s ease; }
+        .chat-msg.sent { background: #dcf8c6; align-self: flex-end; border-bottom-left-radius: 0; color: #000; }
+        .chat-msg.received { background: #fff; align-self: flex-start; border-bottom-right-radius: 0; color: #000; border: 1px solid #ddd; }
+        .chat-msg.show { opacity: 1; transform: translateY(0); }
+
+        /* Toast */
+        #toast { position: absolute; top: 60px; background: rgba(255, 255, 255, 0.95); padding: 15px 40px; border-radius: 50px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); font-size: 20px; color: #8B4513; font-weight: bold; transform: translateY(-150px); transition: transform 0.5s ease; z-index: 30; border: 3px solid #FFDAB9; }
+        #toast.show { transform: translateY(0); }
+        
+        /* Start/End */
+        #start-screen { background: linear-gradient(135deg, #FFDAB9 0%, #FFCCCB 100%); position: absolute; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 20; pointer-events: auto; text-align: center; color: #8B4513; }
+        .start-btn { padding: 15px 60px; font-size: 24px; background: #FFA07A; border: none; border-radius: 50px; color: white; cursor: pointer; font-weight: bold; box-shadow: 0 6px 20px rgba(255, 160, 122, 0.4); margin-top: 30px; transition: transform 0.2s; }
+        .start-btn.selected { transform: scale(1.1); box-shadow: 0 0 25px #fff; border: 2px solid white; }
+        
+        #end-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(40, 30, 25, 0.95); color: #FFDAB9; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; opacity: 0; pointer-events: none; transition: opacity 2s; }
+        #end-overlay.visible { opacity: 1; pointer-events: auto; }
+        
+        #controls-hint { position: absolute; bottom: 30px; width: 100%; text-align: center; color: rgba(255,220,200,0.7); font-size: 18px; font-weight: bold; z-index: 5; }
+        .hidden { display: none !important; }
+    </style>
+    <script type="importmap"> { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } } </script>
+</head>
+<body>
+    <div id="start-screen">
+        <h1 style="font-size: 40px; margin-bottom: 10px;">החדר</h1>
+        <p style="font-size: 18px;">שליטה במקלדת: חצים ו-ENTER</p>
+        <button class="start-btn selected" id="btn-start">התחל (ENTER)</button>
+    </div>
+
+    <div id="end-overlay">
+        <h1 id="end-title" style="font-size: 48px;">סוף</h1>
+        <p id="end-desc" style="font-size: 24px;">...</p>
+    </div>
+
+    <div id="ui-layer">
+        <div id="toast">הודעה</div>
+        <div id="choice-modal" class="modal hidden">
+            <h2 style="margin:0; font-size: 32px; color: #8B4513;">מישהו יושב כאן לבד.</h2>
+            <p style="margin:0; color:#A0522D; font-size: 18px;">הוא לא מבקש דבר.</p>
+            <div class="choices-grid">
+                <div class="choice-btn" data-action="help"><div class="icon">🤲</div><div class="label">עזרה שקטה</div></div>
+                <div class="choice-btn" data-action="touch"><div class="icon">👉</div><div class="label">לגעת בעדינות</div></div>
+                <div class="choice-btn" data-action="water"><div class="icon">💧</div><div class="label">להשאיר מים</div></div>
+                <div class="choice-btn" data-action="call"><div class="icon">📱</div><div class="label">לקרוא לעזרה</div></div>
+                <div class="choice-btn" data-action="leave"><div class="icon">🦶</div><div class="label">ללכת</div></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="phone-container">
+        <div class="phone-notch"></div>
+        <div class="phone-screen">
+            <div style="text-align: center; color: #888; font-size: 12px; margin-bottom: 10px;">היום</div>
+            <div id="msg1" class="chat-msg sent">חדר 3, בחור נראה לא טוב.</div>
+            <div id="msg2" class="chat-msg received">תודה רבה, בטיפול.</div>
+        </div>
+    </div>
+
+    <div id="controls-hint">חצים לתנועה</div>
+    <div id="canvas-container"></div>
+<script type="module">
+    import * as THREE from 'three';
+
+    // --- AUDIO ENGINE ---
+    class SoundSystem {
+        constructor() {
+            this.ctx = null; this.masterGain = null;
+            this.breathGain = null;
+        }
+        init() {
+            if (this.ctx) return;
+            this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+            this.masterGain = this.ctx.createGain(); this.masterGain.connect(this.ctx.destination);
+            this.setupHeavyBreathing();
+        }
+        setupHeavyBreathing() {
+            const bufferSize = 2 * this.ctx.sampleRate;
+            const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+            for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+
+            const noise = this.ctx.createBufferSource(); noise.buffer = buffer; noise.loop = true;
+            
+            const filter = this.ctx.createBiquadFilter(); 
+            filter.type = 'bandpass'; 
+            filter.Q.value = 1; 
+
+            this.breathGain = this.ctx.createGain(); 
+            this.breathGain.gain.value = 0;
+
+            const lfo = this.ctx.createOscillator();
+            lfo.type = 'sine';
+            lfo.frequency.value = 0.25; 
+
+            const lfoFilterGain = this.ctx.createGain(); lfoFilterGain.gain.value = 300;
+            const lfoVolGain = this.ctx.createGain(); lfoVolGain.gain.value = 0.3;
+
+            lfo.connect(lfoFilterGain); lfoFilterGain.connect(filter.frequency);
+            lfo.connect(lfoVolGain); lfoVolGain.connect(this.breathGain.gain);
+
+            filter.frequency.value = 600; 
+
+            noise.connect(filter); filter.connect(this.breathGain); 
+            this.breathGain.connect(this.masterGain);
+            
+            noise.start(); lfo.start();
+        }
+        
+        setProximity(dist) {
+            if (!this.ctx) return;
+            const maxDist = 8;
+            let vol = 1 - (Math.min(dist, maxDist) / maxDist);
+            vol = Math.pow(vol, 1.5);
+            if(this.breathGain) this.masterGain.gain.setTargetAtTime(vol * 2.0, this.ctx.currentTime, 0.1);
+        }
+        
+        playTone(freq, duration) {
+            if (!this.ctx) return;
+            const t = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator(); osc.type='sine'; osc.frequency.setValueAtTime(freq,t);
+            const g = this.ctx.createGain(); g.gain.setValueAtTime(0.1,t); g.gain.linearRampToValueAtTime(0,t+duration);
+            osc.connect(g); g.connect(this.masterGain); osc.start(); osc.stop(t+duration);
+        }
+        
+        playGasp() {
+             if (!this.ctx) return; const t = this.ctx.currentTime;
+             const osc = this.ctx.createOscillator(); osc.type='triangle'; osc.frequency.setValueAtTime(300, t); osc.frequency.exponentialRampToValueAtTime(600, t+0.2);
+             const g = this.ctx.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.3, t+0.1); g.gain.linearRampToValueAtTime(0, t+0.3);
+             osc.connect(g); g.connect(this.masterGain); osc.start(); osc.stop(t+0.3);
+        }
+        
+        playDistantCall() {
+             if (!this.ctx) return; const t = this.ctx.currentTime;
+             const osc = this.ctx.createOscillator(); osc.type='sine'; osc.frequency.setValueAtTime(440, t);
+             const g = this.ctx.createGain(); g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.05, t+1); g.gain.linearRampToValueAtTime(0.15, t+4);
+             osc.connect(g); g.connect(this.masterGain); osc.start(); osc.stop(t+5);
+        }
+    }
+    const audio = new SoundSystem();
+
+    // --- VISUALS ---
+    const scene = new THREE.Scene(); scene.background = new THREE.Color(0xFFE4C4); // Bisque
+    scene.fog = new THREE.Fog(0xFFE4C4, 1, 15);
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
+    const renderer = new THREE.WebGLRenderer({antialias:true});
+    renderer.setSize(window.innerWidth, window.innerHeight); renderer.shadowMap.enabled = true;
+    document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+    const mats = {
+        wall: new THREE.MeshStandardMaterial({color: 0xFFDAB9, roughness: 0.8}),
+        floor: new THREE.MeshStandardMaterial({color: 0xDEB887, roughness: 0.9}),
+        cushion: new THREE.MeshStandardMaterial({color: 0xFFB6C1, roughness: 1}),
+        rug: new THREE.MeshStandardMaterial({color: 0xF5DEB3, roughness: 1}),
+        charSkin: new THREE.MeshStandardMaterial({color: 0xFFEBCD}),
+        charClothes: new THREE.MeshStandardMaterial({color: 0xAEEEEE}),
+        bottle: new THREE.MeshStandardMaterial({color: 0xE0FFFF, transparent:true, opacity:0.6}),
+        phone: new THREE.MeshStandardMaterial({color: 0x708090}),
+        bulb: new THREE.MeshStandardMaterial({color: 0xFFF8DC, emissive: 0xFFF8DC, emissiveIntensity: 0.8}),
+        tear: new THREE.MeshStandardMaterial({color: 0x87CEEB, roughness: 0.1}) // Tears
+    };
+
+    // ROOM
+    const room = new THREE.Group();
+    const wBack = new THREE.Mesh(new THREE.BoxGeometry(8, 5, 0.5), mats.wall); wBack.position.set(0, 2.5, -5); wBack.receiveShadow=true;
+    const wL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 5, 15), mats.wall); wL.position.set(-4.25, 2.5, 2.5); wL.receiveShadow=true;
+    const wR = new THREE.Mesh(new THREE.BoxGeometry(0.5, 5, 15), mats.wall); wR.position.set(4.25, 2.5, 2.5); wR.receiveShadow=true;
+    const floor = new THREE.Mesh(new THREE.BoxGeometry(9, 0.5, 15), mats.floor); floor.position.y = -0.25; floor.receiveShadow=true;
+    room.add(wBack, wL, wR, floor); scene.add(room);
+
+    // PROPS
+    const rug = new THREE.Mesh(new THREE.CircleGeometry(2, 32), mats.rug);
+    rug.rotation.x = -Math.PI/2; rug.position.set(0, 0.01, -2); rug.receiveShadow=true; scene.add(rug);
+    const c1 = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.3, 1.5), mats.cushion); c1.position.set(-2, 0.15, -3); c1.castShadow=true; scene.add(c1);
+    const c2 = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.3, 1.5), mats.cushion); c2.position.set(2, 0.15, -2); c2.castShadow=true; scene.add(c2);
+
+    // STRING LIGHTS
+    for(let i=0; i<10; i++) {
+        const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.08), mats.bulb);
+        bulb.position.set(-3.5 + i*0.8, 3.5 + Math.sin(i)*0.3, -4.7);
+        scene.add(bulb);
+        if(i%3===0) { const pl = new THREE.PointLight(0xFFF8DC, 0.4, 4); pl.position.copy(bulb.position); scene.add(pl); }
+    }
+
+    // CHARACTER
+    const charGrp = new THREE.Group();
+    const charBody = new THREE.Mesh(new THREE.SphereGeometry(0.6, 16, 16), mats.charClothes); charBody.position.y = 0.6; charBody.scale.set(1, 1.2, 1);
+    
+    const charHeadGroup = new THREE.Group(); charHeadGroup.position.y = 1.4;
+    const charHead = new THREE.Mesh(new THREE.SphereGeometry(0.45, 16, 16), mats.charSkin);
+    
+    // Eyes & Tears (No mouth)
+    const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.05), new THREE.MeshBasicMaterial({color:0x222})); eyeL.position.set(-0.15, 0.1, 0.4);
+    const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.05), new THREE.MeshBasicMaterial({color:0x222})); eyeR.position.set(0.15, 0.1, 0.4);
+    const tearL = new THREE.Mesh(new THREE.CapsuleGeometry(0.03, 0.15), mats.tear); tearL.position.set(-0.15, -0.05, 0.42);
+    const tearR = new THREE.Mesh(new THREE.CapsuleGeometry(0.03, 0.15), mats.tear); tearR.position.set(0.15, -0.05, 0.42);
+    
+    charHead.add(eyeL, eyeR, tearL, tearR);
+    charHeadGroup.add(charHead); charHeadGroup.rotation.x = 0.6; // Head down
+    
+    // Arms
+    const armGeo = new THREE.CapsuleGeometry(0.15, 0.6);
+    const armL = new THREE.Mesh(armGeo, mats.charClothes); armL.position.set(-0.5, 0.8, 0.2); armL.rotation.x = -Math.PI/2; armL.rotation.z = 0.5;
+    const armR = new THREE.Mesh(armGeo, mats.charClothes); armR.position.set(0.5, 0.8, 0.2); armR.rotation.x = -Math.PI/2; armR.rotation.z = -0.5;
+
+    charGrp.add(charBody, charHeadGroup, armL, armR);
+    charGrp.position.set(0, 0, -2); charGrp.rotation.y = Math.PI; // Back to player
+    charGrp.traverse(o=>{if(o.isMesh)o.castShadow=true;}); scene.add(charGrp);
+
+    // EMOJI SPRITE FUNCTION
+    function createEmojiSprite(emojiChar) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 128; canvas.height = 128;
+        const ctx = canvas.getContext('2d');
+        ctx.font = "80px Arial"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(emojiChar, 64, 64);
+        const tex = new THREE.CanvasTexture(canvas);
+        const mat = new THREE.SpriteMaterial({map: tex});
+        const sprite = new THREE.Sprite(mat);
+        sprite.scale.set(1, 1, 1);
+        return sprite;
+    }
+
+    // BOTTLE & PHONE
+    const bottle = new THREE.Mesh(new THREE.CapsuleGeometry(0.15, 0.5), mats.bottle);
+    bottle.position.set(1.5, 0.3, 0); bottle.castShadow=true; scene.add(bottle);
+    const phone = new THREE.Group();
+    const pPart1 = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.05, 0.5), mats.phone);
+    const pPart2 = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.05, 0.5), mats.phone); pPart2.position.x = 0.35; pPart2.rotation.z = 0.2;
+    phone.add(pPart1, pPart2); phone.position.set(-1.5, 0.03, 1); scene.add(phone);
+
+    // LIGHTING
+    const mainLight = new THREE.PointLight(0xFFDAB9, 1.0, 15); mainLight.position.set(0, 4, 2); mainLight.castShadow=true; scene.add(mainLight);
+    scene.add(new THREE.AmbientLight(0x404040, 1.5));
+
+    // --- LOGIC ---
+    let state = 'start', player = { x: 0, z: 7, rot: 0 }, cooldown = 0, menuIndex = 0;
+    const keys = {};
+
+    window.addEventListener('keydown', (e) => {
+        keys[e.key] = true;
+        if (e.key === 'Enter') handleEnter();
+        if (state === 'menu') handleMenuNav(e.key);
+    });
+    window.addEventListener('keyup', (e) => keys[e.key] = false);
+
+    document.getElementById('btn-start').onclick = handleEnter;
+
+    function handleEnter() {
+        if (state === 'start') {
+            document.getElementById('start-screen').classList.add('hidden');
+            state = 'playing'; audio.init();
+        } else if (state === 'menu') {
+            const btns = document.querySelectorAll('.choice-btn');
+            document.getElementById('choice-modal').classList.add('hidden');
+            handleAction(btns[menuIndex].dataset.action);
+        } else if (state === 'resolved') {
+            location.reload();
+        }
+    }
+
+    function handleMenuNav(k) {
+        if (k === 'ArrowRight') { menuIndex = (menuIndex + 1) % 5; updateMenuUI(); audio.playTone(300, 0.05); }
+        if (k === 'ArrowLeft') { menuIndex = (menuIndex + 4) % 5; updateMenuUI(); audio.playTone(250, 0.05); }
+    }
+
+    function updateMenuUI() {
+        const btns = document.querySelectorAll('.choice-btn');
+        btns.forEach(b => b.classList.remove('selected'));
+        btns[menuIndex].classList.add('selected');
+    }
+
+    function showToast(msg) {
+        const t = document.getElementById('toast'); t.innerText=msg; t.classList.add('show');
+        setTimeout(()=>t.classList.remove('show'), 2000);
+    }
+
+    function endGame(msg) {
+        setTimeout(()=>{
+            document.getElementById('end-desc').innerText = msg;
+            document.getElementById('end-overlay').classList.add('visible');
+            state = 'resolved';
+        }, 1500);
+    }
+
+    function showFloatingEmoji(char) {
+        const spr = createEmojiSprite(char);
+        spr.position.copy(charGrp.position);
+        spr.position.y += 1.8;
+        scene.add(spr);
+        // Float up and fade
+        let ly = spr.position.y;
+        const int = setInterval(()=>{
+            ly += 0.01; spr.position.y = ly;
+            spr.material.opacity -= 0.01;
+            if(spr.material.opacity <= 0) { clearInterval(int); scene.remove(spr); }
+        }, 30);
+    }
+
+    function handleAction(type){
+        __sendDecision(type);
+        state = 'animating';
+        
+        if(type === 'help') {
+            showToast("עזרה שקטה...");
+            let p=0; const startRot = charGrp.rotation.y;
+            const int = setInterval(()=>{
+                p+=0.02;
+                charGrp.rotation.y = THREE.MathUtils.lerp(startRot, Math.PI*2, p);
+                charHeadGroup.rotation.x = THREE.MathUtils.lerp(0.6, 0, p);
+                if(p>0.8 && p<0.83) showFloatingEmoji("💖"); 
+                mainLight.intensity = THREE.MathUtils.lerp(1.0, 1.5, p);
+                if(p>=1) { clearInterval(int); endGame("הוא הרגיש את החום שלך."); }
+            }, 30);
+
+        } else if(type === 'touch') {
+            showToast("הוא לא רוצה מגע.");
+            audio.playGasp();
+            let p=0; const startZ = charGrp.position.z;
+            const int = setInterval(()=>{
+                p+=0.05;
+                if(p<1.0) { // Turn & Push
+                    charGrp.rotation.y = THREE.MathUtils.lerp(Math.PI, Math.PI*2, p);
+                    armL.rotation.x = -1.5; armR.rotation.x = -1.5;
+                    armL.position.z = 0.5 + Math.sin(p*3)*0.2;
+                } else if (p < 2.0) { // Push back player
+                    player.z += 0.1;
+                } else { // Return to shell
+                    charGrp.rotation.y = THREE.MathUtils.lerp(Math.PI*2, Math.PI, (p-2));
+                    armL.rotation.x = -Math.PI/2; armR.rotation.x = -Math.PI/2;
+                }
+                if(p>=3.0) { clearInterval(int); showFloatingEmoji("😣"); endGame("הטרדת את מנוחתו."); }
+            }, 30);
+
+        } else if(type === 'water') {
+            showToast("השארת מים.");
+            let p=0; const bStart = bottle.position.clone(); const bEnd = new THREE.Vector3(0, 0.5, -1.2);
+            const int = setInterval(()=>{
+                p+=0.02;
+                if(p<0.5) {
+                    bottle.position.lerpVectors(bStart, bEnd, p*2);
+                    charGrp.rotation.y = THREE.MathUtils.lerp(Math.PI, Math.PI*2, p*2);
+                } else {
+                    if(p>0.51 && p<0.54) showFloatingEmoji("🥤");
+                    armR.rotation.x = -1.5;
+                    bottle.position.y = THREE.MathUtils.lerp(0.5, 1.2, (p-0.5)*2);
+                }
+                if(p>=1) { clearInterval(int); endGame("הוא שתה ונרגע."); }
+            }, 30);
+
+        } else if(type === 'call') {
+            const ph = document.getElementById('phone-container');
+            ph.classList.add('active');
+            setTimeout(()=>{
+                document.getElementById('msg1').classList.add('show');
+                setTimeout(()=>{
+                    document.getElementById('msg2').classList.add('show');
+                    setTimeout(()=>{
+                        ph.classList.remove('active');
+                        endGame("הדיווח התקבל.");
+                    }, 2000);
+                }, 2000);
+            }, 500);
+
+        } else if(type === 'leave') {
+            endGame("החלטת לתת לו מרחב.");
+        }
+    }
+
+    const clock = new THREE.Clock();
+    function update(dt) {
+        const dist = Math.hypot(player.x - charGrp.position.x, player.z - charGrp.position.z);
+        if (state === 'playing' || state === 'menu') audio.setProximity(dist);
+
+        // Character Breathing / Sobbing Animation
+        charBody.scale.y = 1.0 + Math.sin(Date.now() * 0.005) * 0.03; // Heavy breathing
+        charGrp.position.y = Math.sin(Date.now() * 0.01) * 0.01; // Slight tremble
+        charHeadGroup.rotation.z = Math.sin(Date.now() * 0.003) * 0.05; // Head wobble
+
+        if (state === 'playing') {
+            if(keys.ArrowUp) player.z -= 2.5*dt; if(keys.ArrowDown) player.z += 2.5*dt;
+            player.z = Math.max(-1, Math.min(7, player.z));
+            camera.position.y = 1.6 + Math.sin(Date.now()*0.005)*0.04;
+            if(cooldown > 0) cooldown -= dt;
+            if(dist < 2.5 && cooldown <= 0) {
+                state = 'menu'; menuIndex = 0; updateMenuUI();
+                document.getElementById('choice-modal').classList.remove('hidden');
+            }
+        }
+        camera.position.x = player.x; camera.position.z = player.z;
+    }
+
+    function animate() { requestAnimationFrame(animate); update(clock.getDelta()); renderer.render(scene, camera); }
+    window.onresize = () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); };
+    animate();
+</script>
+</body>
+</html></template>
+    <template id="tpl-booth4"><script>
+  // Proxy sound + decision logging to parent
+  function playSound(name){ try{ parent.playSound && parent.playSound(name); }catch(e){} }
+  function __sendDecision(actionId){
+    try{
+      const node = document.querySelector(`[data-action="${actionId}"]`);
+      const labelNode = node ? (node.querySelector('.label') || node) : null;
+      const actionLabel = labelNode ? labelNode.textContent.trim() : String(actionId);
+      parent.postMessage({ type:"DECISION", boothId:"booth4", actionId:String(actionId), actionLabel }, "*");
+    }catch(e){}
+  }
+</script>
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Circle - Free Roam</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Varela+Round&display=swap');
+
+        body { margin: 0; overflow: hidden; font-family: 'Varela Round', sans-serif; background-color: #2E001F; user-select: none; }
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; display: flex; justify-content: center; align-items: center; }
+        
+        /* Modal */
+        .modal { 
+            background: rgba(255, 240, 245, 0.98); 
+            padding: 40px 50px; 
+            border-radius: 50%; 
+            width: 580px; height: 580px;
+            text-align: center; 
+            box-shadow: 0 0 120px rgba(255, 20, 147, 0.4); 
+            pointer-events: auto; 
+            border: 8px solid #DA70D6; 
+            display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 20px; 
+        }
+
+        .choices-grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 15px; width: 85%; }
+
+        .choice-btn { 
+            background: white; border: 3px solid #E6E6FA; border-radius: 30px; padding: 15px 20px; 
+            cursor: pointer; transition: all 0.2s ease; display: flex; flex-direction: column; align-items: center; gap: 8px; min-width: 110px;
+        }
+        
+        .choice-btn.selected, .choice-btn:hover { 
+            transform: scale(1.1); border-color: #C71585; background-color: #FFF0F5; 
+            box-shadow: 0 0 25px rgba(199, 21, 133, 0.5); border-width: 4px;
+        }
+
+        .icon { font-size: 32px; } .label { font-size: 16px; color: #800080; font-weight: bold; }
+
+        /* Toast */
+        #toast { position: absolute; top: 60px; background: rgba(255, 255, 255, 0.95); padding: 15px 40px; border-radius: 50px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); font-size: 20px; color: #800080; font-weight: bold; transform: translateY(-150px); transition: transform 0.5s ease; z-index: 30; border: 3px solid #DA70D6; }
+        #toast.show { transform: translateY(0); }
+        
+        /* Start/End */
+        #start-screen { background: linear-gradient(135deg, #FF69B4 0%, #4B0082 100%); position: absolute; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 20; pointer-events: auto; text-align: center; color: #FFF; }
+        .start-btn { padding: 15px 60px; font-size: 24px; background: #DA70D6; border: none; border-radius: 50px; color: white; cursor: pointer; font-weight: bold; box-shadow: 0 6px 20px rgba(218, 112, 214, 0.4); margin-top: 30px; transition: transform 0.2s; }
+        .start-btn.selected { transform: scale(1.1); box-shadow: 0 0 30px #fff; border: 3px solid white; }
+        
+        #end-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(30, 0, 30, 0.98); color: #FFC0CB; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; opacity: 0; pointer-events: none; transition: opacity 2s; }
+        #end-overlay.visible { opacity: 1; pointer-events: auto; }
+        
+        #controls-hint { position: absolute; bottom: 30px; width: 100%; text-align: center; color: rgba(255,255,255,0.8); font-size: 18px; font-weight: bold; z-index: 5; }
+        .hidden { display: none !important; }
+    </style>
+    <script type="importmap"> { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } } </script>
+</head>
+<body>
+    <div id="start-screen">
+        <h1 style="font-size: 50px; margin-bottom: 10px;">המעגל</h1>
+        <p style="font-size: 20px;">השתמשו בחצים כדי להסתובב במרחב.</p>
+        <button class="start-btn selected" id="btn-start">התחל (ENTER)</button>
+    </div>
+
+    <div id="end-overlay">
+        <h1 id="end-title" style="font-size: 48px;">סוף</h1>
+        <p id="end-desc" style="font-size: 24px;">...</p>
+    </div>
+
+    <div id="ui-layer">
+        <div id="toast">הודעה</div>
+        <div id="choice-modal" class="modal hidden">
+            <h2 style="margin:0; font-size: 30px; color: #800080;">כולם מצביעים וצוחקים.</h2>
+            <p style="margin:0; color:#C71585; font-size: 18px;">הילד במרכז מסתיר את פניו.</p>
+            <div class="choices-grid">
+                <div class="choice-btn" data-action="intervene"><div class="icon">✋</div><div class="label">להתערב</div></div>
+                <div class="choice-btn" data-action="join"><div class="icon">👉😂</div><div class="label">להצטרף ולהצביע</div></div>
+                <div class="choice-btn" data-action="distract"><div class="icon">🤡</div><div class="label">להסיח דעתם</div></div>
+                <div class="choice-btn" data-action="call"><div class="icon">🗣️🥺</div><div class="label">לקרוא לילד</div></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="controls-hint">חצים לתנועה חופשית</div>
+    <div id="canvas-container"></div>
+<script type="module">
+    import * as THREE from 'three';
+
+    // --- INTENSE AUDIO ENGINE ---
+    class SoundSystem {
+        constructor() {
+            this.ctx = null; this.masterGain = null;
+            this.chaosInterval = null;
+            this.cryOsc = null; this.cryGain = null;
+        }
+        init() {
+            if (this.ctx) return;
+            this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+            this.masterGain = this.ctx.createGain(); this.masterGain.connect(this.ctx.destination);
+            this.startChaos();
+        }
+        
+        startChaos() {
+            this.cryOsc = this.ctx.createOscillator(); this.cryOsc.type = 'sine'; this.cryOsc.frequency.value = 250;
+            const cryLFO = this.ctx.createOscillator(); cryLFO.frequency.value = 3;
+            const cryLFOGain = this.ctx.createGain(); cryLFOGain.gain.value = 30;
+            cryLFO.connect(cryLFOGain); cryLFOGain.connect(this.cryOsc.frequency);
+            this.cryGain = this.ctx.createGain(); this.cryGain.gain.value = 0.1;
+            this.cryOsc.connect(this.cryGain); this.cryGain.connect(this.masterGain);
+            this.cryOsc.start(); cryLFO.start();
+
+            this.chaosInterval = setInterval(() => {
+                if (Math.random() > 0.4) {
+                    this.playNasalLaugh();
+                    setTimeout(() => this.playNasalLaugh(), 120);
+                    if(Math.random() > 0.6) setTimeout(() => this.playNasalLaugh(), 250);
+                }
+            }, 500);
+        }
+
+        playNasalLaugh() {
+            const t = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator(); osc.type = 'sawtooth';
+            const baseFreq = 500 + Math.random() * 300;
+            osc.frequency.setValueAtTime(baseFreq, t);
+            osc.frequency.linearRampToValueAtTime(baseFreq + 100, t + 0.15);
+            const g = this.ctx.createGain();
+            g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.15, t + 0.02); g.gain.linearRampToValueAtTime(0, t + 0.15);
+            osc.connect(g); g.connect(this.masterGain);
+            osc.start(t); osc.stop(t + 0.15);
+        }
+
+        stopChaos() {
+            if (this.chaosInterval) clearInterval(this.chaosInterval);
+            if (this.cryOsc) { this.cryOsc.stop(); this.cryOsc = null; }
+        }
+
+        setIntensity(dist) {
+            if (!this.ctx) return;
+            const maxDist = 15; let vol = 1 - (Math.min(dist, maxDist) / maxDist);
+            this.masterGain.gain.setTargetAtTime(vol * 1.2, this.ctx.currentTime, 0.1);
+        }
+
+        playTone(freq) {
+            if (!this.ctx) return; const t = this.ctx.currentTime;
+            const osc = this.ctx.createOscillator(); osc.frequency.setValueAtTime(freq, t);
+            const g = this.ctx.createGain(); g.gain.setValueAtTime(0.1, t); g.gain.linearRampToValueAtTime(0, t+0.3);
+            osc.connect(g); g.connect(this.masterGain); osc.start(); osc.stop(t+0.3);
+        }
+
+        playCalm() {
+            this.stopChaos();
+            const osc = this.ctx.createOscillator(); osc.type='sine'; osc.frequency.value = 440;
+            const g = this.ctx.createGain(); g.gain.value=0.1; g.gain.linearRampToValueAtTime(0, this.ctx.currentTime+3);
+            osc.connect(g); g.connect(this.masterGain); osc.start();
+        }
+    }
+    const audio = new SoundSystem();
+
+    // --- VISUALS ---
+    const scene = new THREE.Scene(); scene.background = new THREE.Color(0x4B0082); 
+    scene.fog = new THREE.Fog(0x4B0082, 2, 30);
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
+    const renderer = new THREE.WebGLRenderer({antialias:true});
+    renderer.setSize(window.innerWidth, window.innerHeight); renderer.shadowMap.enabled = true;
+    document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+    const mats = {
+        wall: new THREE.MeshStandardMaterial({color: 0x8B008B, side: THREE.BackSide}),
+        floor: new THREE.MeshStandardMaterial({color: 0x9370DB}),
+        adult: new THREE.MeshStandardMaterial({color: 0xBA55D3}),
+        child: new THREE.MeshStandardMaterial({color: 0xFF1493}),
+        skin: new THREE.MeshBasicMaterial({color: 0xFFC0CB}),
+        faceFeatures: new THREE.MeshBasicMaterial({color: 0x4B0082})
+    };
+
+    // ROOM & FLOOR
+    const room = new THREE.Mesh(new THREE.CylinderGeometry(12, 12, 8, 32, 1, true), mats.wall); room.position.y = 4; room.receiveShadow=true; scene.add(room);
+    const floor = new THREE.Mesh(new THREE.CylinderGeometry(12, 12, 0.5, 32), mats.floor); floor.position.y = -0.25; floor.receiveShadow=true; scene.add(floor);
+    for(let i=1; i<6; i++) {
+        const ring = new THREE.Mesh(new THREE.RingGeometry(i*2, i*2+0.3, 64), new THREE.MeshBasicMaterial({color:0x800080}));
+        ring.rotation.x = -Math.PI/2; ring.position.y = 0.01; scene.add(ring);
+    }
+
+    // LIGHTS
+    scene.add(new THREE.AmbientLight(0xFF69B4, 0.4));
+    const mainLight = new THREE.PointLight(0xFFC0CB, 1, 25); mainLight.position.set(0, 6, 0); mainLight.castShadow=true; scene.add(mainLight);
+
+    // CHARACTERS
+    const adults = [];
+    const adultGroup = new THREE.Group();
+
+    function createAdult(mats) {
+        const grp = new THREE.Group();
+        const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.5, 1, 16), mats.adult); torso.position.y = 0.5;
+        const head = new THREE.Mesh(new THREE.SphereGeometry(0.3), mats.adult); head.position.y = 1.15;
+        const smile = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.03, 2, 16, Math.PI), mats.faceFeatures); smile.rotation.z = Math.PI; smile.position.set(0,-0.05,0.28);
+        const eyeL = new THREE.Mesh(new THREE.SphereGeometry(0.05), mats.faceFeatures); eyeL.position.set(-0.12,0.1,0.25);
+        const eyeR = new THREE.Mesh(new THREE.SphereGeometry(0.05), mats.faceFeatures); eyeR.position.set(0.12,0.1,0.25);
+        head.add(smile, eyeL, eyeR);
+        const armGeo = new THREE.CapsuleGeometry(0.1, 0.6);
+        const rightArm = new THREE.Mesh(armGeo, mats.adult); rightArm.geometry.translate(0, -0.3, 0);
+        rightArm.position.set(0.35, 1.0, 0); rightArm.rotation.x = -Math.PI/2 + 0.4;
+        rightArm.name = "pointingArm";
+        const leftArm = new THREE.Mesh(armGeo, mats.adult); leftArm.position.set(-0.35, 0.7, 0);
+        grp.add(torso, head, rightArm, leftArm);
+        grp.traverse(o=>{if(o.isMesh)o.castShadow=true;});
+        return grp;
+    }
+
+    // Increased radius to 3.5 so you can see through gaps
+    for(let i=0; i<4; i++) {
+        const grp = createAdult(mats);
+        const angle = (i / 4) * Math.PI * 2;
+        grp.position.set(Math.cos(angle)*3.5, 0, Math.sin(angle)*3.5);
+        grp.lookAt(0,0,0);
+        grp.userData = { startPos: grp.position.clone(), angle: angle };
+        adults.push(grp); adultGroup.add(grp);
+    }
+    scene.add(adultGroup);
+
+    // CHILD
+    const childGrp = new THREE.Group();
+    const cBody = new THREE.Mesh(new THREE.CapsuleGeometry(0.2, 0.7), mats.child); cBody.position.y = 0.4;
+    const cHead = new THREE.Mesh(new THREE.SphereGeometry(0.22), mats.child); cHead.position.y = 0.85;
+    const tearL = new THREE.Mesh(new THREE.CapsuleGeometry(0.02, 0.1), new THREE.MeshBasicMaterial({color:0x00BFFF})); tearL.position.set(-0.08, 0, 0.2);
+    const tearR = new THREE.Mesh(new THREE.CapsuleGeometry(0.02, 0.1), new THREE.MeshBasicMaterial({color:0x00BFFF})); tearR.position.set(0.08, 0, 0.2);
+    cHead.add(tearL, tearR);
+    const cArmGeo = new THREE.CapsuleGeometry(0.08, 0.4);
+    const cArmL = new THREE.Mesh(cArmGeo, mats.child); cArmL.position.set(-0.2, 0.6, 0.1); cArmL.rotation.x = -2.5; cArmL.rotation.z = 0.5; cArmL.name="cArmL";
+    const cArmR = new THREE.Mesh(cArmGeo, mats.child); cArmR.position.set(0.2, 0.6, 0.1); cArmR.rotation.x = -2.5; cArmR.rotation.z = -0.5; cArmR.name="cArmR";
+    childGrp.add(cBody, cHead, cArmL, cArmR);
+    childGrp.traverse(o=>{if(o.isMesh)o.castShadow=true;});
+    scene.add(childGrp);
+
+    // PLAYER HANDS
+    const playerHands = new THREE.Group();
+    const pHandGeo = new THREE.CapsuleGeometry(0.1, 0.5);
+    const pHandL = new THREE.Mesh(pHandGeo, mats.skin); pHandL.position.set(-0.3, -0.3, -0.5); pHandL.rotation.x = -Math.PI/2;
+    const pHandR = new THREE.Mesh(pHandGeo, mats.skin); pHandR.position.set(0.3, -0.3, -0.5); pHandR.rotation.x = -Math.PI/2;
+    playerHands.add(pHandL, pHandR); playerHands.visible=false;
+    camera.add(playerHands); scene.add(camera);
+
+    // --- LOGIC ---
+    let state='start', player={x:0,z:10,rot:0}, cooldown=0, menuIndex=0;
+    let childMoveTarget = null;
+    const keys={};
+
+    window.addEventListener('keydown',e=>{keys[e.key]=true;if(e.key==='Enter')handleEnter();if(state==='menu')handleMenuNav(e.key);});
+    window.addEventListener('keyup',e=>keys[e.key]=false);
+    document.getElementById('btn-start').onclick=handleEnter;
+
+    function handleEnter(){
+        if(state==='start'){document.getElementById('start-screen').classList.add('hidden');state='playing';audio.init();}
+        else if(state==='menu'){
+            document.getElementById('choice-modal').classList.add('hidden');
+            handleAction(document.querySelectorAll('.choice-btn')[menuIndex].dataset.action);
+        } else if(state==='resolved') location.reload();
+    }
+    function handleMenuNav(k){
+        if(k==='ArrowRight'){menuIndex=(menuIndex+1)%4;audio.playTone(600);}
+        if(k==='ArrowLeft'){menuIndex=(menuIndex+3)%4;audio.playTone(500);}
+        updateMenuUI();
+    }
+    function updateMenuUI(){document.querySelectorAll('.choice-btn').forEach((b,i)=>b.classList.toggle('selected',i===menuIndex));}
+    function showToast(msg){const t=document.getElementById('toast');t.innerText=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2000);}
+    function endGame(msg){setTimeout(()=>{document.getElementById('end-desc').innerText=msg;document.getElementById('end-overlay').classList.add('visible');state='resolved';},2000);}
+
+    function handleAction(type){
+        __sendDecision(type);
+        state = 'animating';
+        
+        if(type === 'intervene') {
+            showToast("התפרצת למעגל!");
+            let p=0;
+            const int = setInterval(()=>{
+                p+=0.02;
+                // Move apart to let child out
+                adults[0].position.x = THREE.MathUtils.lerp(adults[0].userData.startPos.x, 5.5, p);
+                adults[1].position.z = THREE.MathUtils.lerp(adults[1].userData.startPos.z, -5.5, p);
+                adults[2].position.x = THREE.MathUtils.lerp(adults[2].userData.startPos.x, -5.5, p);
+                adults[3].position.x = THREE.MathUtils.lerp(adults[3].userData.startPos.x, 5.5, p);
+                childGrp.position.z += 0.08; 
+                if(p>=1) { clearInterval(int); endGame("המעגל פוזר. הילד ברח."); }
+            }, 30);
+
+        } else if(type === 'join') {
+            showToast("הצטרפת להצבעה...");
+            let p=0;
+            const int = setInterval(()=>{
+                p+=0.01;
+                // Move camera closer to center
+                const targetX = 0; const targetZ = 2.0; 
+                player.x = THREE.MathUtils.lerp(player.x, targetX, 0.05);
+                player.z = THREE.MathUtils.lerp(player.z, targetZ, 0.05);
+                
+                if(p>0.3) playerHands.visible = true; 
+                adultGroup.rotation.y += 0.05; 
+                camera.rotation.z = Math.sin(p*30)*0.05; 
+                if(p>=1) { clearInterval(int); audio.stopChaos(); endGame("הפכת לחלק מהבעיה."); }
+            }, 30);
+
+        } else if(type === 'distract') {
+            showToast("הם מסתכלים עליך עכשיו!");
+            audio.stopChaos(); audio.playTone(200); 
+            // Adults turn to face PLAYER coords
+            adults.forEach(a => {
+                a.lookAt(player.x, 0, player.z); // Dynamic look
+                a.getObjectByName("pointingArm").rotation.x = -Math.PI/2 - 0.3; 
+            });
+            // Child flees away from player
+            childGrp.getObjectByName("cArmL").rotation.x = 0;
+            childGrp.getObjectByName("cArmR").rotation.x = 0;
+            // Vector away from player
+            const fleeDir = childGrp.position.clone().sub(new THREE.Vector3(player.x, 0, player.z)).normalize().multiplyScalar(15);
+            childMoveTarget = fleeDir;
+            setTimeout(()=>endGame("הם צוחקים עליך, אבל הילד ברח."), 2000);
+
+        } else if(type === 'call') {
+            showToast("קראת לו...");
+            audio.playCalm();
+            childGrp.getObjectByName("cArmL").rotation.x = 0;
+            childGrp.getObjectByName("cArmR").rotation.x = 0;
+            // Child moves TO Player
+            childMoveTarget = new THREE.Vector3(player.x, 0, player.z); 
+        }
+    }
+
+    const clock = new THREE.Clock();
+    function update(dt) {
+        const dist = Math.hypot(player.x, player.z); 
+        if (state === 'playing' || state === 'menu') audio.setIntensity(dist);
+
+        if(state !== 'resolved') {
+            adults.forEach((a,i) => { a.position.y = Math.abs(Math.sin(Date.now()*0.01+i))*0.3; });
+            childGrp.rotation.z = Math.sin(Date.now()*0.03)*0.05; 
+        }
+
+        // Child Logic
+        if(childMoveTarget) {
+            childGrp.lookAt(childMoveTarget.x, 0, childMoveTarget.z);
+            childGrp.translateZ(3 * dt); // Move forward
+            
+            // Check distance to player for "Call" win
+            const dToPlayer = childGrp.position.distanceTo(new THREE.Vector3(player.x, 0, player.z));
+            if(dToPlayer < 1.5 && state === 'animating' && !childMoveTarget.equals(new THREE.Vector3(0,0,15))) {
+                 endGame("הוא בא אליך בבכי.");
+                 childMoveTarget = null;
+            }
+        }
+
+        if (state === 'playing') {
+            // Free Roam Movement
+            const speed = 4.0 * dt;
+            const rotSpeed = 2.0 * dt;
+            
+            if (keys.ArrowLeft) player.rot += rotSpeed;
+            if (keys.ArrowRight) player.rot -= rotSpeed;
+            
+            // Calculate direction vectors based on rotation
+            const dirX = Math.sin(player.rot);
+            const dirZ = Math.cos(player.rot);
+            
+            if (keys.ArrowUp) {
+                player.x -= dirX * speed;
+                player.z -= dirZ * speed;
+            }
+            if (keys.ArrowDown) {
+                player.x += dirX * speed;
+                player.z += dirZ * speed;
+            }
+
+            // Room boundary check (Radius ~8.5)
+            const roomRadius = 8.5;
+            if (Math.hypot(player.x, player.z) > roomRadius) {
+                const angle = Math.atan2(player.x, player.z);
+                player.x = Math.sin(angle) * roomRadius;
+                player.z = Math.cos(angle) * roomRadius;
+            }
+
+            camera.position.y = 1.6 + Math.sin(Date.now()*0.005)*0.04;
+            
+            // Trigger close to child (dist < 4)
+            if(dist < 4.0 && cooldown <= 0) {
+                state = 'menu'; menuIndex = 0; updateMenuUI();
+                document.getElementById('choice-modal').classList.remove('hidden');
+            }
+        }
+        
+        if (cooldown > 0) cooldown -= dt;
+
+        camera.position.x = player.x;
+        camera.position.z = player.z;
+        camera.rotation.y = player.rot;
+    }
+
+    function animate() { requestAnimationFrame(animate); update(clock.getDelta()); renderer.render(scene, camera); }
+    window.onresize = () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); };
+    animate();
+</script>
+</body>
+</html></template>
+    <template id="tpl-booth5"><script>
+  // Proxy sound + decision logging to parent
+  function playSound(name){ try{ parent.playSound && parent.playSound(name); }catch(e){} }
+  function __sendDecision(actionId){
+    try{
+      const node = document.querySelector(`[data-action="${actionId}"]`);
+      const labelNode = node ? (node.querySelector('.label') || node) : null;
+      const actionLabel = labelNode ? labelNode.textContent.trim() : String(actionId);
+      parent.postMessage({ type:"DECISION", boothId:"booth5", actionId:String(actionId), actionLabel }, "*");
+    }catch(e){}
+  }
+</script>
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Home Choice - Final Logic</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Varela+Round&display=swap');
+
+        body { margin: 0; overflow: hidden; font-family: 'Varela Round', sans-serif; background-color: #e0e0e0; user-select: none; }
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+        #ui-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 10; pointer-events: none; }
+        
+        /* TIMER */
+        #timer {
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+            font-size: 32px; color: #444; background: rgba(255,255,255,0.9);
+            padding: 8px 30px; border-radius: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        #timer.urgent { color: #d35400; background: #fff0e0; }
+
+        /* Start/End */
+        #start-screen { background: linear-gradient(135deg, #fdfbfb 0%, #ebedee 100%); position: absolute; width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 20; pointer-events: auto; text-align: center; color: #333; }
+        .start-btn { padding: 15px 50px; font-size: 22px; background: #333; border: none; border-radius: 50px; color: #fff; cursor: pointer; font-weight: bold; margin-top: 30px; transition: 0.3s; }
+        .start-btn:hover { background: #555; transform: scale(1.05); }
+        
+        #end-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(255, 255, 255, 0.98); color: #222; display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100; opacity: 0; pointer-events: none; transition: opacity 1.5s; }
+        #end-overlay.visible { opacity: 1; pointer-events: auto; }
+        
+        #controls-hint { position: absolute; bottom: 30px; width: 100%; text-align: center; color: rgba(0,0,0,0.5); font-size: 18px; z-index: 5; }
+        .hidden { display: none !important; }
+    </style>
+    <script type="importmap"> { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } } </script>
+</head>
+<body>
+    <div id="start-screen">
+        <h1 style="font-size: 40px; margin-bottom: 10px;">הבית</h1>
+        <p style="font-size: 18px; max-width: 600px; line-height: 1.5;">התקדמו לסוף המסדרון ופנו ימינה או שמאלה.<br>אין בחירה טובה או רעה.<br>יש לכם 20 שניות.</p>
+        <button class="start-btn" id="btn-start">היכנסו (ENTER)</button>
+    </div>
+
+    <div id="end-overlay">
+        <h1 id="end-title" style="font-size: 42px; margin-bottom: 10px;"></h1>
+        <button class="start-btn" onclick="location.reload()">התחל מחדש</button>
+    </div>
+
+    <div id="ui-layer">
+        <div id="timer" class="hidden">20.00</div>
+    </div>
+
+    <div id="controls-hint">חצים ימינה/שמאלה לסיבוב, למעלה/למטה לתנועה</div>
+    <div id="canvas-container"></div>
+<script type="module">
+    import * as THREE from 'three';
+
+    // --- AUDIO ---
+    class SoundSystem {
+        constructor() {
+            this.ctx = null; this.masterGain = null;
+            this.leftGain = null; this.rightGain = null;
+        }
+        init() {
+            if (this.ctx) return;
+            this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+            this.masterGain = this.ctx.createGain(); this.masterGain.connect(this.ctx.destination);
+            this.setupWarmSound();
+            this.setupCleanSound();
+        }
+        setupWarmSound() { 
+            this.leftGain = this.ctx.createGain(); this.leftGain.gain.value = 0;
+            this.leftGain.connect(this.masterGain);
+            [261.63, 329.63, 392.00].forEach(f => { 
+                const o = this.ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = f;
+                const g = this.ctx.createGain(); g.gain.value = 0.1;
+                o.connect(g); g.connect(this.leftGain); o.start();
+            });
+        }
+        setupCleanSound() { 
+            this.rightGain = this.ctx.createGain(); this.rightGain.gain.value = 0;
+            this.rightGain.connect(this.masterGain);
+            setInterval(()=>{
+                if(this.rightGain.gain.value > 0.01) {
+                    const t = this.ctx.currentTime;
+                    const o = this.ctx.createOscillator(); o.type='sine'; o.frequency.setValueAtTime(523.25, t); 
+                    const g = this.ctx.createGain(); g.gain.setValueAtTime(0,t); g.gain.linearRampToValueAtTime(0.1, t+0.05); g.gain.exponentialRampToValueAtTime(0.001, t+0.4);
+                    o.connect(g); g.connect(this.rightGain); o.start(); o.stop(t+0.5);
+                }
+            }, 500); 
+        }
+        updateMix(x, z) {
+            if (!this.ctx) return;
+            const proximity = Math.max(0, (-z - 8) / 10);
+            let l = 0.05, r = 0.05;
+            if (z < -8) {
+                let pan = (x + 5) / 10; pan = Math.max(0, Math.min(1, pan));
+                l = (1-pan) * proximity; r = pan * proximity;
+            }
+            this.leftGain.gain.setTargetAtTime(l, this.ctx.currentTime, 0.2);
+            this.rightGain.gain.setTargetAtTime(r, this.ctx.currentTime, 0.2);
+        }
+    }
+    const audio = new SoundSystem();
+
+    // --- VISUALS ---
+    const scene = new THREE.Scene(); scene.background = new THREE.Color(0xf5f5f5); 
+    scene.fog = new THREE.Fog(0xf5f5f5, 2, 35);
+    const camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
+    const renderer = new THREE.WebGLRenderer({antialias:true});
+    renderer.setSize(window.innerWidth, window.innerHeight); renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+    // MATERIALS
+    const mats = {
+        floorWood: new THREE.MeshStandardMaterial({color: 0x8B5A2B, roughness: 0.6}),
+        floorGrey: new THREE.MeshStandardMaterial({color: 0xDDDDDD, roughness: 0.4}),
+        wallCream: new THREE.MeshStandardMaterial({color: 0xFFFFF0}),
+        
+        // Warm
+        wallWarm: new THREE.MeshStandardMaterial({color: 0xFDF5E6}),
+        accentWarm: new THREE.MeshStandardMaterial({color: 0xDAA520}),
+        fabricWarm: new THREE.MeshStandardMaterial({color: 0xF0E68C}),
+        
+        // Cool
+        wallCool: new THREE.MeshStandardMaterial({color: 0xF0FFFF}),
+        accentCool: new THREE.MeshStandardMaterial({color: 0x4682B4}),
+        fabricCool: new THREE.MeshStandardMaterial({color: 0xB0C4DE}), 
+        rugBlue: new THREE.MeshStandardMaterial({color: 0x708090}),
+
+        wood: new THREE.MeshStandardMaterial({color: 0xA0522D}),
+        metal: new THREE.MeshStandardMaterial({color: 0x778899, metalness: 0.6}),
+        blackMetal: new THREE.MeshStandardMaterial({color: 0x222222, metalness: 0.7}),
+        plantGreen: new THREE.MeshStandardMaterial({color: 0x556B2F})
+    };
+
+    // --- HOUSE STRUCTURE ---
+    const house = new THREE.Group();
+
+    // 1. MAIN HALLWAY
+    const hallFloor = new THREE.Mesh(new THREE.BoxGeometry(6, 0.2, 30), mats.floorWood); hallFloor.position.y = -0.1; hallFloor.receiveShadow = true;
+    const runner = new THREE.Mesh(new THREE.BoxGeometry(2, 0.22, 28), mats.fabricWarm); runner.position.y = -0.09; runner.receiveShadow = true;
+    const hallWallL = new THREE.Mesh(new THREE.BoxGeometry(0.5, 4, 30), mats.wallCream); hallWallL.position.set(-3.25, 2, 0); hallWallL.receiveShadow=true;
+    const hallWallR = new THREE.Mesh(new THREE.BoxGeometry(0.5, 4, 30), mats.wallCream); hallWallR.position.set(3.25, 2, 0); hallWallR.receiveShadow=true;
+    
+    const ceilLightGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.1);
+    const ceilLightMesh = new THREE.Mesh(ceilLightGeo, mats.metal); ceilLightMesh.position.set(0, 3.9, 5);
+    const ceilLightSource = new THREE.PointLight(0xFFFDD0, 0.8, 8); ceilLightSource.position.set(0, 3.5, 5);
+    
+    const consoleL = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 3), mats.wood); consoleL.position.set(-2.5, 0.5, 5); consoleL.castShadow=true;
+    const consoleR = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 3), mats.wood); consoleR.position.set(2.5, 0.5, 0); consoleR.castShadow=true;
+    for(let i=0; i<3; i++) {
+        const p = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.5, 1), mats.accentWarm); p.position.set(-2.9, 2.5, 8 - i*6); house.add(p);
+    }
+    house.add(hallFloor, runner, hallWallL, hallWallR, consoleL, consoleR, ceilLightMesh, ceilLightSource);
+
+    // 2. THE SPLIT (Rooms)
+    const roomsZ = -18;
+    
+    // LEFT ROOM: WARM/COZY
+    const roomL = new THREE.Group(); roomL.position.set(-7, 0, roomsZ);
+    const flL = new THREE.Mesh(new THREE.BoxGeometry(12, 0.2, 12), mats.floorWood); flL.position.y=-0.1; flL.receiveShadow=true;
+    const rugL = new THREE.Mesh(new THREE.CylinderGeometry(4, 4, 0.25), mats.fabricWarm); rugL.position.set(0,-0.08, -1); rugL.receiveShadow=true;
+    const wBackL = new THREE.Mesh(new THREE.BoxGeometry(12, 4, 0.5), mats.wallWarm); wBackL.position.set(0, 2, -6); wBackL.receiveShadow=true;
+    
+    const sofaBase = new THREE.Mesh(new THREE.BoxGeometry(4, 0.8, 1.5), mats.accentWarm); sofaBase.position.set(0, 0.4, -3); sofaBase.castShadow=true;
+    const sofaBack = new THREE.Mesh(new THREE.BoxGeometry(4, 1.2, 0.5), mats.accentWarm); sofaBack.position.set(0, 0.6, -3.8); sofaBack.castShadow=true;
+    const c1 = new THREE.Mesh(new THREE.SphereGeometry(0.4), mats.fabricWarm); c1.position.set(-1.5, 1, -3.3);
+    const c2 = new THREE.Mesh(new THREE.SphereGeometry(0.4), mats.fabricWarm); c2.position.set(1.5, 1, -3.3);
+    
+    const tableL = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, 0.5), mats.wood); tableL.position.set(0, 0.25, 1); tableL.castShadow=true;
+    const plantPot = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.3, 0.6), mats.accentWarm); plantPot.position.set(-3, 0.3, -3); plantPot.castShadow=true;
+    const plantLeaf = new THREE.Mesh(new THREE.DodecahedronGeometry(0.8), mats.plantGreen); plantLeaf.position.set(-3, 0.8, -3); plantLeaf.castShadow=true;
+    
+    const shelf = new THREE.Mesh(new THREE.BoxGeometry(2, 3, 0.5), mats.wood); shelf.position.set(4, 1.5, -5); shelf.castShadow=true;
+    const lampStand = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.2, 3), mats.metal); lampStand.position.set(3, 1.5, -2);
+    const lampShade = new THREE.Mesh(new THREE.ConeGeometry(0.8, 1, 16, 1, true), mats.fabricWarm); lampShade.position.set(3, 3, -2);
+    
+    const lightL = new THREE.PointLight(0xFFD700, 1.5, 15); lightL.position.set(0, 4, -2); 
+    
+    roomL.add(flL, rugL, wBackL, sofaBase, sofaBack, c1, c2, tableL, plantPot, plantLeaf, shelf, lampStand, lampShade, lightL);
+    house.add(roomL);
+
+    // RIGHT ROOM: MODERN/OFFICE (Detailed)
+    const roomR = new THREE.Group(); roomR.position.set(7, 0, roomsZ);
+    const flR = new THREE.Mesh(new THREE.BoxGeometry(12, 0.2, 12), mats.floorGrey); flR.position.y=-0.1; flR.receiveShadow=true;
+    const wBackR = new THREE.Mesh(new THREE.BoxGeometry(12, 4, 0.5), mats.wallCool); wBackR.position.set(0, 2, -6); wBackR.receiveShadow=true;
+    
+    // Modern Rectangular Rug
+    const rugR = new THREE.Mesh(new THREE.BoxGeometry(6, 0.22, 4), mats.rugBlue); rugR.position.set(0, -0.08, -1); rugR.receiveShadow=true;
+
+    // Desk
+    const desk = new THREE.Mesh(new THREE.BoxGeometry(4, 0.1, 1.8), mats.accentCool); desk.position.set(0, 1, -4); desk.castShadow=true;
+    const deskLegL = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1, 1.5), mats.metal); deskLegL.position.set(-1.4, 0.5, -4);
+    const deskLegR = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1, 1.5), mats.metal); deskLegR.position.set(1.4, 0.5, -4);
+    
+    // Filing Cabinet
+    const cabinet = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.5, 1.5), mats.metal); cabinet.position.set(-3, 0.75, -4.5); cabinet.castShadow=true;
+
+    // Computer Tower (Under desk)
+    const tower = new THREE.Mesh(new THREE.BoxGeometry(0.5, 1.2, 1.2), mats.blackMetal); tower.position.set(1.2, 0.6, -4);
+
+    // Chair
+    const chairSeat = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.2, 1.5), mats.fabricCool); chairSeat.position.set(0, 0.6, -2.5);
+    const chairBase = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.6), mats.metal); chairBase.position.set(0, 0.3, -2.5);
+    
+    // Monitor
+    const monitor = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1, 0.1), mats.blackMetal); monitor.position.set(0, 1.6, -4.5);
+    
+    // Wall Art (Geometric)
+    const artFrame = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 0.1), mats.blackMetal); artFrame.position.set(3, 2.5, -5.8);
+    const artCanvas = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.8, 0.12), mats.accentCool); artCanvas.position.set(3, 2.5, -5.8);
+
+    // Shelves
+    for(let i=0; i<3; i++) {
+        const s = new THREE.Mesh(new THREE.BoxGeometry(3, 0.05, 0.8), mats.metal); s.position.set(3, 1.5 + i*0.8, -5.5); s.castShadow=true; roomR.add(s);
+    }
+    
+    const lightR = new THREE.PointLight(0x87CEEB, 1.5, 15); lightR.position.set(0, 4, -2);
+
+    roomR.add(flR, wBackR, rugR, desk, deskLegL, deskLegR, cabinet, tower, chairSeat, chairBase, monitor, artFrame, artCanvas, lightR);
+    house.add(roomR);
+
+    scene.add(house);
+
+    // LIGHTING
+    const amb = new THREE.AmbientLight(0xffffff, 0.4); scene.add(amb);
+    const dir = new THREE.DirectionalLight(0xffffff, 0.5); dir.position.set(2, 10, 5); dir.castShadow=true;
+    scene.add(dir);
+
+    // --- LOGIC ---
+    let state = 'start';
+    let player = { x: 0, z: 12, rot: 0 };
+    let timeLeft = 20.00;
+    const keys = {};
+
+    window.addEventListener('keydown', e => { keys[e.key] = true; if(e.key==='Enter' && state==='start') startGame(); });
+    window.addEventListener('keyup', e => keys[e.key] = false);
+    document.getElementById('btn-start').onclick = startGame;
+
+    function startGame() {
+        document.getElementById('start-screen').classList.add('hidden');
+        document.getElementById('timer').classList.remove('hidden');
+        state = 'playing';
+        audio.init();
+    }
+
+    function endGame(text) {
+        state = 'ended';
+        document.getElementById('end-title').innerText = text;
+        document.getElementById('end-overlay').classList.add('visible');
+        const t = audio.ctx.currentTime;
+        audio.masterGain.gain.setTargetAtTime(0, t, 1);
+    }
+
+    const clock = new THREE.Clock();
+    
+    function update(dt) {
+        if (state === 'playing') {
+            timeLeft -= dt;
+            const tEl = document.getElementById('timer');
+            tEl.innerText = Math.max(0, timeLeft).toFixed(2);
+            if (timeLeft <= 5) tEl.classList.add('urgent');
+            
+            // Check End Condition Logic
+            if (timeLeft <= 0) {
+                // Check if inside a room zone (even if not at wall)
+                if (player.x < -3 && player.z < -14) {
+                    endGame("החדר החמים");
+                } else if (player.x > 3 && player.z < -14) {
+                    endGame("החדר המודרני");
+                } else {
+                    endGame("הזמן תם");
+                }
+                return;
+            }
+
+            audio.updateMix(player.x, player.z);
+
+            // TANK CONTROLS
+            const rotSpeed = 2.0 * dt;
+            const moveSpeed = 5.0 * dt;
+            
+            if(keys.ArrowLeft) player.rot += rotSpeed;
+            if(keys.ArrowRight) player.rot -= rotSpeed;
+            
+            const dirX = Math.sin(player.rot);
+            const dirZ = Math.cos(player.rot);
+            
+            if(keys.ArrowUp) { player.x -= dirX * moveSpeed; player.z -= dirZ * moveSpeed; }
+            if(keys.ArrowDown) { player.x += dirX * moveSpeed; player.z += dirZ * moveSpeed; }
+
+            // Boundaries
+            if (player.z > -14) { // Hallway
+                if(player.x > 2.8) player.x = 2.8; if(player.x < -2.8) player.x = -2.8;
+            }
+            player.z = Math.min(14, player.z);
+
+            // Trigger Endings (Wall collision)
+            if (player.z < -22) {
+                if (player.x < 0) endGame("החדר החמים");
+                else endGame("החדר המודרני");
+            }
+        }
+        camera.position.x = player.x;
+        camera.position.y = 1.7 + Math.sin(Date.now()*0.008)*0.03;
+        camera.position.z = player.z;
+        camera.rotation.y = player.rot;
+    }
+
+    function animate() { requestAnimationFrame(animate); update(clock.getDelta()); renderer.render(scene, camera); }
+    window.onresize = () => { camera.aspect = window.innerWidth/window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); };
+    animate();
+</script>
+</body>
+</html></template>
+
+<script type="module">
+    import * as THREE from 'three';
+
+    // --- GLOBAL STATE ---
+    const STORAGE_KEY = 'psych_garden_completed_v1';
+
+    function loadCompleted() {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            const arr = raw ? JSON.parse(raw) : [];
+            return new Set(Array.isArray(arr) ? arr : []);
+        } catch(e) {
+            return new Set();
+        }
+    }
+    function saveCompleted(set) {
+        try { localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(set))); } catch(e) {}
+    }
+
+    const state = {
+        mode: 'park', // 'park', 'modal', 'booth'
+        activeBoothId: null,
+        player: { x: 0, z: 45, rot: Math.PI },
+        completed: loadCompleted(),
+        lastExitBoothId: null,
+        exitCooldownUntil: 0,
+        boothData: {
+            1: { name: 'הארנק' },
+            2: { name: 'המסדרון' },
+            3: { name: 'החדר' },
+            4: { name: 'המעגל' },
+            5: { name: 'הבחירה' }
+        }
+    };
+
+// --- analytics helpers (decisions + time + value inference) ---
+const decisionLog = [];
+const sessionStartMs = Date.now();
+const boothEnterMs = Object.create(null);
+const boothTotalMs = Object.create(null);
+const boothVisitCount = Object.create(null);
+
+function _nowISO(){ return new Date().toISOString(); }
+function _timeLabel(){
+  const ms = Date.now() - sessionStartMs;
+  const s = Math.floor(ms/1000);
+  const mm = String(Math.floor(s/60)).padStart(2,'0');
+  const ss = String(s%60).padStart(2,'0');
+  return `${mm}:${ss}`;
+}
+function _fmtDur(ms){
+  const s = Math.max(0, Math.floor(ms/1000));
+  const mm = String(Math.floor(s/60)).padStart(2,'0');
+  const ss = String(s%60).padStart(2,'0');
+  return `${mm}:${ss}`;
+}
+function _addBoothTime(boothId, endMs){
+  const startMs = boothEnterMs[boothId];
+  if(typeof startMs !== 'number') return 0;
+  const d = Math.max(0, endMs - startMs);
+  boothTotalMs[boothId] = (boothTotalMs[boothId] || 0) + d;
+  delete boothEnterMs[boothId];
+  return d;
+}
+
+// Very lightweight value inference from action text (Hebrew + English keywords).
+function _inferValues(label){
+  // Fallback heuristic when we don't have a booth/action profile.
+  const t = (label||"").toLowerCase();
+  const hits = [];
+
+  const add=(k)=>{ if(!hits.includes(k)) hits.push(k); };
+
+  // prosocial / care
+  if(/help|assist|aid|support|comfort|hug|care|water|feed|save|rescue|דאג|לעזור|תמיכ|ניחומ|להציל|להשקות|להאכיל/.test(t)) add("empathy");
+  if(/ask|talk|call|phone|knock|listen|שאל|לדבר|להתקשר|לדפוק|להקשיב/.test(t)) add("communication");
+
+  // ethics / rules
+  if(/return|give back|report|police|guard|official|אבטחה|לדווח|להחזיר|משטרה/.test(t)) add("integrity");
+  if(/steal|take|keep|hide|שמור|לקחת|להחביא|לגנוב/.test(t)) add("self_interest");
+
+  // risk / boldness
+  if(/confront|intervene|approach|enter|go in|להתערב|להיכנס|להתקרב|לעימות/.test(t)) add("courage");
+  if(/leave|ignore|walk away|avoid|להתרחק|להתעלם|לעזוב/.test(t)) add("avoidance");
+
+  // curiosity / play
+  if(/explore|look|inspect|curious|לבדוק|להסתכל|לחקור/.test(t)) add("curiosity");
+
+  // control / planning
+  if(/plan|organize|document|record|write|לארגן|לתעד|לכתוב/.test(t)) add("order");
+
+  return hits;
+}
+
+const VALUE_DIMENSIONS = [
+  {key:"empathy", label:"אמפתיה ודאגה"},
+  {key:"integrity", label:"יושרה והוגנות"},
+  {key:"courage", label:"אומץ ואסרטיביות"},
+  {key:"communication", label:"תקשורת ושיתוף"},
+  {key:"curiosity", label:"סקרנות וחקר"},
+  {key:"order", label:"סדר, תכנון ושליטה"},
+  {key:"autonomy", label:"עצמאות ובחירה"},
+  {key:"cooperation", label:"שיתוף פעולה"},
+  {key:"responsibility", label:"אחריות וקבלת החלטות"},
+  {key:"prudence", label:"זהירות וניהול סיכונים"},
+  {key:"creativity", label:"יצירתיות ואלתור"},
+  {key:"self_care", label:"שמירה על עצמי"},
+  {key:"justice", label:"צדק ועמידה על עקרונות"},
+  {key:"authority", label:"הסתמכות על סמכות/כללים"},
+  {key:"playfulness", label:"משחקיות והומור"},
+  {key:"environment", label:"התחשבות בסביבה"},
+  {key:"optimism", label:"אופטימיות ותקווה"},
+  {key:"persistence", label:"התמדה"},
+  {key:"trust", label:"אמון באחרים"},
+  {key:"skepticism", label:"חשדנות ובדיקה"},
+  {key:"emotional_regulation", label:"וויסות רגשי"},
+  {key:"compassion_boundaries", label:"חמלה עם גבולות"},
+  {key:"status_ambition", label:"שאפתנות/סטטוס"},
+  {key:"novelty", label:"חיפוש חידוש"},
+];
+
+const ACTION_PROFILES = {
+  booth1: {
+    ask:   {tags:["communication","empathy","courage"], deltas:{communication:+8, empathy:+4, courage:+3, prudence:+1}},
+    call:  {tags:["communication","authority","responsibility"], deltas:{communication:+6, authority:+4, responsibility:+4, prudence:+2}},
+    take:  {tags:["self_interest","risk"], deltas:{integrity:-10, responsibility:-4, status_ambition:+2, prudence:-3}},
+    leave: {tags:["avoidance","self_care"], deltas:{self_care:+3, prudence:+2, courage:-3, empathy:-2}}
+  },
+  booth2: {
+    knock:  {tags:["communication","courage"], deltas:{communication:+6, courage:+5, empathy:+2}},
+    listen: {tags:["curiosity","skepticism"], deltas:{curiosity:+5, skepticism:+4, prudence:+2}},
+    call:   {tags:["authority","responsibility"], deltas:{authority:+5, responsibility:+6, prudence:+2}},
+    ignore: {tags:["avoidance"], deltas:{self_care:+2, empathy:-4, responsibility:-3}}
+  },
+  booth3: {
+    help:  {tags:["empathy","responsibility"], deltas:{empathy:+8, responsibility:+5, compassion_boundaries:+2}},
+    water: {tags:["empathy","environment"], deltas:{empathy:+4, environment:+6, responsibility:+2}},
+    touch: {tags:["curiosity","novelty"], deltas:{curiosity:+5, novelty:+4, prudence:-2}},
+    call:  {tags:["authority","responsibility"], deltas:{authority:+4, responsibility:+5}},
+    leave: {tags:["self_care"], deltas:{self_care:+3, empathy:-3, responsibility:-2}}
+  },
+  booth4: {
+    intervene: {tags:["courage","justice"], deltas:{courage:+8, justice:+6, communication:+3, prudence:-2}},
+    distract:  {tags:["creativity","emotional_regulation"], deltas:{creativity:+7, emotional_regulation:+6, prudence:+2}},
+    call:      {tags:["authority","prudence"], deltas:{authority:+6, prudence:+6, responsibility:+3}},
+    join:      {tags:["cooperation","status_ambition"], deltas:{cooperation:+5, status_ambition:+4, integrity:-2}},
+    leave:     {tags:["self_care","avoidance"], deltas:{self_care:+4, prudence:+3, courage:-4, justice:-2}}
+  }
+};
+
+function _getProfile(boothId, actionId){
+  const b = ACTION_PROFILES[String(boothId||"").toLowerCase()];
+  if(!b) return null;
+  return b[String(actionId||"").toLowerCase()] || null;
+}
+
+function scoreDecision(boothId, actionId, label){
+  const p = _getProfile(boothId, actionId);
+  if(p) return {tags:p.tags.slice(), deltas:Object.assign({}, p.deltas)};
+  const tags = _inferValues(label);
+  // Convert tags into small deltas (soft scoring)
+  const deltas = {};
+  const bump=(k,v)=>{ deltas[k]=(deltas[k]||0)+v; };
+  for(const tag of tags){
+    if(tag==="empathy") bump("empathy", +4);
+    if(tag==="communication") bump("communication", +3);
+    if(tag==="integrity") bump("integrity", +4);
+    if(tag==="courage") bump("courage", +3);
+    if(tag==="curiosity") bump("curiosity", +3);
+    if(tag==="order") bump("order", +2);
+    if(tag==="avoidance") bump("self_care", +2), bump("courage",-2);
+    if(tag==="self_interest") bump("integrity",-3), bump("status_ambition", +2);
+  }
+  return {tags, deltas};
+}
+
+function computeValueScores(decisions){
+  const scores = {};
+  for(const d of VALUE_DIMENSIONS) scores[d.key]=50; // neutral baseline
+
+  for(const r of decisions){
+    const deltas = r.deltas || {};
+    for(const k of Object.keys(deltas)){
+      scores[k] = (scores[k] ?? 50) + deltas[k];
+    }
+  }
+  // clamp
+  for(const k of Object.keys(scores)){
+    scores[k] = Math.max(0, Math.min(100, Math.round(scores[k])));
+  }
+  return scores;
+}
+
+window.__PG_onBoothEnter = function(boothId){
+  boothEnterMs[boothId] = Date.now();
+  boothVisitCount[boothId] = (boothVisitCount[boothId] || 0) + 1;
+  decisionLog.push({
+    tISO: _nowISO(),
+    tLabel: _timeLabel(),
+    booth: boothId,
+    event: 'ENTER',
+    actionId: 'ENTER',
+    actionLabel: 'נכנס/ה לחדר',
+    valueTags: []
+  });
+};
+
+window.__PG_onBoothExit = function(boothId, reason){
+  _addBoothTime(boothId, Date.now());
+  decisionLog.push({
+    tISO: _nowISO(),
+    tLabel: _timeLabel(),
+    booth: boothId,
+    event: 'EXIT',
+    actionId: 'EXIT',
+    actionLabel: (reason ? `יצא/ה מהחדר (${reason})` : 'יצא/ה מהחדר'),
+    valueTags: []
+  });
+};
+
+// Accepts either: (boothId, actionId, actionLabel) OR a single object payload from postMessage.
+window.__PG_logDecision = function(a, b, c, meta){
+  // Supports both: __PG_logDecision({boothId, actionId, actionLabel, ...})
+  // and: __PG_logDecision(boothId, actionId, actionLabel, meta)
+  let payload = null;
+
+  if(a && typeof a === "object"){
+    payload = a;
+  } else {
+    payload = { boothId: a, actionId: b, actionLabel: c };
+    if(meta && typeof meta === "object") Object.assign(payload, meta);
+  }
+
+  const boothId = (payload.boothId ?? "unknown").toString();
+  const actionId = (payload.actionId ?? payload.action ?? "unknown").toString();
+  const actionLabel = (payload.actionLabel ?? payload.label ?? actionId).toString();
+
+  const now = Date.now();
+  const sinceStartMs = Math.max(0, now - sessionStartMs);
+
+  // Reaction time since entering booth (if we have it)
+  const enterMs = boothEnterMs[boothId];
+  const reactionMs = (typeof enterMs === "number") ? Math.max(0, now - enterMs) : null;
+
+  const scored = scoreDecision(boothId, actionId, actionLabel);
+
+  decisionLog.push({
+    event: "DECISION",
+    ts: now,
+    sinceStartMs,
+    reactionMs,
+    boothId,
+    actionId,
+    actionLabel,
+    tags: scored.tags || [],
+    deltas: scored.deltas || {},
+    meta: payload.meta || payload
+  });
+
+  if(decisionLog.length > 1000) decisionLog.splice(0, decisionLog.length - 1000);
+
+  if(window.__PG_dashboardOpen){
+    try{ renderDashboard(); }catch(e){}
+  }
+};
+
+
+function escapeHtml(str){
+  return String(str ?? "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#39;");
+}
+
+function renderDashboard(){
+  const rowsEl = document.getElementById('dashRows');
+  const metaEl = document.getElementById('dashMeta');
+  const valueEl = document.getElementById('valuePanel');
+  if(!rowsEl || !metaEl || !valueEl) return;
+
+  const decisions = decisionLog.filter(r => r && r.event === "DECISION");
+  const totalDecisions = decisions.length;
+
+  // --- basic session metrics ---
+  const now = Date.now();
+  const elapsedMin = Math.round(((now - sessionStartMs)/60000)*10)/10;
+
+  const boothsVisited = Array.from(new Set(decisions.map(d => d.boothId))).filter(Boolean);
+  const perBoothCounts = {};
+  for(const d of decisions){
+    perBoothCounts[d.boothId] = (perBoothCounts[d.boothId]||0) + 1;
+  }
+
+  // --- value scoring ---
+  const scores = computeValueScores(decisions);
+
+  // sort values by score
+  const sorted = VALUE_DIMENSIONS
+    .map(v => ({...v, score: (scores[v.key] ?? 50)}))
+    .sort((a,b)=>b.score-a.score);
+
+  const top5 = sorted.slice(0,5);
+  const low5 = sorted.slice(-5).reverse();
+
+  // --- decision style signals (lightweight heuristics) ---
+  const reaction = decisions.map(d=>d.reactionMs).filter(v=>typeof v==="number");
+  const avgReaction = reaction.length ? Math.round(reaction.reduce((a,b)=>a+b,0)/reaction.length) : null;
+
+  const tagCounts = {};
+  for(const d of decisions){
+    for(const t of (d.tags||[])){
+      tagCounts[t]=(tagCounts[t]||0)+1;
+    }
+  }
+
+  metaEl.innerHTML = `
+    <div><b>סה״כ זמן:</b> ${elapsedMin} דק׳</div>
+    <div><b>בחירות:</b> ${totalDecisions}</div>
+    <div><b>ביתנים שביקרת:</b> ${boothsVisited.length ? boothsVisited.join(", ") : "—"}</div>
+    <div><b>זמן תגובה ממוצע:</b> ${avgReaction!=null ? (avgReaction/1000).toFixed(1)+" שנ׳" : "—"}</div>
+  `;
+
+  // Values panel
+  const row=(v)=>`<div class="vRow"><div class="vLabel">${v.label}</div><div class="vBar"><div class="vFill" style="width:${v.score}%;"></div></div><div class="vScore">${v.score}</div></div>`;
+  valueEl.innerHTML = `
+    <div class="vSection">
+      <div class="vTitle">ערכים דומיננטיים</div>
+      ${top5.map(row).join("")}
+    </div>
+    <div class="vSection">
+      <div class="vTitle">ערכים פחות מודגשים</div>
+      ${low5.map(row).join("")}
+    </div>
+    <div class="vSection">
+      <div class="vTitle">פירוש קצר (היוריסטי)</div>
+      <div class="vText">
+        <div>הדשבורד מזהה נטיות דרך <b>בחירות</b>, <b>דפוסי זמן</b> ו<b>אופי פעולה</b>. זה לא אבחון, אלא מראה להתנהגות במשחק.</div>
+        <div style="margin-top:6px"><b>תדירות תגיות:</b> ${
+          Object.keys(tagCounts).length
+            ? Object.entries(tagCounts).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([k,v])=>`${k}: ${v}`).join(" · ")
+            : "—"
+        }</div>
+      </div>
+    </div>
+  `;
+
+  // Decisions table
+  if(!totalDecisions){
+    rowsEl.innerHTML = `<tr><td colspan="3" style="opacity:.7">עדיין אין בחירות שנרשמו. טיפ: ודאי שהקליקים על פעולות שולחים DECISION מהביתן.</td></tr>`;
+    return;
+  }
+
+  const last = decisions.slice(-60).reverse();
+  rowsEl.innerHTML = last.map(d => {
+    const tsec = Math.round(d.sinceStartMs/1000);
+    const tags = (d.tags||[]).slice(0,6).join(", ");
+    return `
+      <tr><td>${tsec}s</td><td>${d.boothId}</td><td><div style="font-weight:700">${escapeHtml(d.actionLabel || d.actionId)}</div><div style="opacity:.8;font-size:12px">${escapeHtml(tags)}</div></td></tr>
+    `;
+  }).join("");
+}
+function openDashboard(){
+  window.__PG_dashboardOpen = true;
+  renderDashboard();
+  const m=document.getElementById('dashModal');
+  if(m){ m.classList.add('show'); m.setAttribute('aria-hidden','false'); }
+  if(!window.__PG_dashTimer){
+    window.__PG_dashTimer = setInterval(()=>{ try{ renderDashboard(); }catch(e){} }, 700);
+  }
+}
+function closeDashboard(){
+  window.__PG_dashboardOpen = false;
+  const m=document.getElementById('dashModal');
+  if(m){ m.classList.remove('show'); m.setAttribute('aria-hidden','true'); }
+  if(window.__PG_dashTimer){
+    clearInterval(window.__PG_dashTimer);
+    window.__PG_dashTimer = null;
+  }
+}
+
+// Expose dashboard controls globally and allow booth iframes to open it
+window.openDashboard = openDashboard;
+window.closeDashboard = closeDashboard;
+window.addEventListener('message', (e) => {
+  const d = e && e.data;
+  if(!d || typeof d !== 'object') return;
+
+  // Requests from booth iframes
+  if(d.type === 'DECISION'){
+    const boothId = String(d.boothId || '');
+    const action = String(d.action || '');
+    const label  = String(d.label || action || '');
+    const ts = typeof d.ts === 'number' ? d.ts : Date.now();
+    if(boothId){
+      __PG_logDecision({ boothId, action, label, ts });
+    }
+    return;
+  }
+
+  if(d.type === 'REQUEST_CLOSE_BOOTH'){
+    const boothId = String(d.boothId || '');
+    if(boothId) closeBooth(boothId);
+    return;
+  }
+
+  if(d.type === 'OPEN_DASHBOARD') openDashboard();
+  if(d.type === 'CLOSE_DASHBOARD') closeDashboard();
+});
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  const b=document.getElementById('btn-endgame');
+  const c=document.getElementById('btn-closeDash');
+  const back=document.querySelector('#dashModal .backdrop');
+  if(b) b.addEventListener('click', ()=>{ typeof window.playSound==='function' && window.playSound('click'); window.openDashboard && window.openDashboard(); });
+  if(c) c.addEventListener('click', ()=>{ typeof window.playSound==='function' && window.playSound('click'); closeDashboard(); });
+  if(back) back.addEventListener('click', closeDashboard);
+  document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeDashboard(); });
+});
+
+
+    // Shared Three.js objects
+    const renderer = new THREE.WebGLRenderer({antialias:true});
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+    const keys = {};
+    window.addEventListener('keydown', e => keys[e.key] = true);
+    window.addEventListener('keyup', e => keys[e.key] = false);
+
+    // Booth stage elements
+    const boothStage = document.getElementById('booth-stage');
+    const boothIframe = document.getElementById('booth-iframe');
+    const stageHint = document.getElementById('stage-hint');
+
+    let autoExitTimer = null;
+
+    function instrumentBoothHtml(id, html){
+        if(!html) return html;
+        const tag = '<!--PG_INSTRUMENTED-->';
+        if(html.includes(tag)) return html;
+
+        // Inject a tiny bridge that logs decisions + allows the booth to request closing itself
+        const inject = tag + `<script>
+(function(){
+  const BOOTH_ID = ${JSON.stringify(String(id))};
+  function post(type, payload){
+    try{ parent.postMessage(Object.assign({type, boothId: BOOTH_ID}, payload||{}), '*'); }catch(e){}
+  }
+
+  // Log decisions (common buttons have data-action and/or .choice-btn)
+  document.addEventListener('click', function(ev){
+    const el = ev.target && ev.target.closest ? ev.target.closest('.choice-btn,[data-action]') : null;
+    if(!el) return;
+    const action = el.getAttribute('data-action') || (el.dataset ? el.dataset.action : '') || '';
+    if(!action) return;
+    const label = (el.innerText || '').trim();
+    post('DECISION', { action, label, ts: Date.now() });
+  }, true);
+
+  // Auto-exit when an end overlay becomes visible
+  const endEl = document.getElementById('end-overlay') || document.querySelector('.end-overlay');
+  if(endEl){
+    const isVisible = () => {
+      const cs = window.getComputedStyle(endEl);
+      return cs && cs.display !== 'none' && cs.visibility !== 'hidden' && cs.opacity !== '0';
+    };
+    const obs = new MutationObserver(function(){
+      if(isVisible()){
+        setTimeout(()=>post('REQUEST_CLOSE_BOOTH', {}), 600);
+      }
+    });
+    obs.observe(endEl, { attributes:true, attributeFilter:['style','class'] });
+    if(isVisible()) setTimeout(()=>post('REQUEST_CLOSE_BOOTH', {}), 600);
+  }
+})();
+<\/script>`;
+
+        return html.replace(/<\/body\s*>/i, inject + '</body>');
+    }
+
+    function getTemplateHtml(id) {
+        const t = document.getElementById('tpl-booth' + id);
+        const raw = t ? t.innerHTML : '';
+        return instrumentBoothHtml(id, raw);
+    }
+
+    function enterBooth(id) {
+        let mm = document.getElementById('minimap');
+        if (mm) mm.style.display = 'none';
+
+    mm = document.getElementById('minimap'); if (mm) mm.style.display = 'none';
+        console.log("Entering Booth", id);
+
+        // close modal
+        park.closeModal();
+
+        state.mode = 'booth';
+        mm = document.getElementById('minimap');
+        if (mm) mm.style.display = 'none';
+        boothStage.style.display = 'block';
+        boothStage.setAttribute('aria-hidden', 'false');
+        stageHint.style.display = 'block';
+
+        // Load booth HTML AS IS into iframe via srcdoc
+        boothIframe.srcdoc = getTemplateHtml(id);
+
+        // Auto-exit watcher:
+// 1) Preferred: if an element with id="end-overlay" becomes visible (your booths use this)
+// 2) Fallback: body background becomes black
+if (autoExitTimer) clearInterval(autoExitTimer);
+let visibleStreak = 0;
+
+autoExitTimer = setInterval(() => {
+    try {
+        const doc = boothIframe.contentDocument;
+        if (!doc) return;
+
+        // (1) Detect end overlay visibility
+        const endOverlay = doc.getElementById('end-overlay');
+        let overlayVisible = false;
+        if (endOverlay) {
+            const cs = getComputedStyle(endOverlay);
+            const dispOk = cs.display !== 'none';
+            const visOk = cs.visibility !== 'hidden';
+            const op = parseFloat(cs.opacity || '1');
+            overlayVisible = endOverlay.classList.contains('visible') || (dispOk && visOk && op > 0.25) || (cs.pointerEvents && cs.pointerEvents !== 'none');
+        }
+
+        // (2) Fallback: body is black
+        let bodyIsBlack = false;
+        if (doc.body) {
+            const bg = getComputedStyle(doc.body).backgroundColor || "";
+            const m = bg.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+            if (m) {
+                const r = +m[1], g = +m[2], b = +m[3];
+                bodyIsBlack = (r + g + b) < 40;
+            } else {
+                bodyIsBlack = bg.toLowerCase().includes('black');
+            }
+        }
+
+        if (overlayVisible || bodyIsBlack) visibleStreak++;
+        else visibleStreak = 0;
+
+        // ~1.0–1.5s stable => exit
+        if (visibleStreak >= 2) {
+            exitBooth(id, 'auto_end_screen');
+        }
+    } catch(e) {}
+}, 500);
+    }
+
+    function exitBooth(id, reason) {
+        // mark completed
+        state.completed.add(id);
+        saveCompleted(state.completed);
+
+        // close iframe stage
+        if (autoExitTimer) { clearInterval(autoExitTimer); autoExitTimer = null; }
+        boothIframe.srcdoc = "<!doctype html><html><body style='margin:0;background:#000;'></body></html>";
+        boothStage.style.display = 'none';
+        boothStage.setAttribute('aria-hidden', 'true');
+        stageHint.style.display = 'none';
+
+        // refresh checkmarks
+        park.rebuildBooths();
+
+        // push player back slightly to avoid instant re-open
+        state.lastExitBoothId = id;
+        state.exitCooldownUntil = performance.now() + 1600;
+
+        state.player.z += Math.cos(state.player.rot) * 12;
+        state.player.x += Math.sin(state.player.rot) * 12;        if(window.__PG_onBoothExit) window.__PG_onBoothExit(id, reason || 'exit');
+        activeBooth = null;
+
+
+        state.mode = 'park';
+    }
+
+    // Emergency exit (keyboard only)
+    window.addEventListener('keydown', (e) => {
+        if (state.mode === 'booth' && e.key === 'Escape') {
+            if (autoExitTimer) { clearInterval(autoExitTimer); autoExitTimer = null; }
+            boothIframe.srcdoc = "<!doctype html><html><body style='margin:0;background:#000;'></body></html>";
+            boothStage.style.display = 'none';
+            boothStage.setAttribute('aria-hidden', 'true');
+            stageHint.style.display = 'none';
+            state.mode = 'park';
+        }
+    });
+
+    // --- PARK LOGIC ---
+    class Park {
+        init() {
+            this.scene = new THREE.Scene(); this.scene.background = new THREE.Color(0x87CEEB);
+            this.scene.fog = new THREE.Fog(0x87CEEB, 10, 80);
+            this.camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 200);
+
+            // Ground & Path
+            const grass = new THREE.Mesh(new THREE.PlaneGeometry(200,200), new THREE.MeshStandardMaterial({color:0x55aa55}));
+            grass.rotation.x=-Math.PI/2; this.scene.add(grass);
+
+            const paths = new THREE.Group();
+            const matPath = new THREE.MeshStandardMaterial({color:0xe0d6aa});
+            const p1 = new THREE.Mesh(new THREE.BoxGeometry(6, 0.1, 60), matPath); p1.position.y=0.05;
+            const p2 = new THREE.Mesh(new THREE.BoxGeometry(40, 0.1, 4), matPath); p2.position.set(0,0.05,-5);
+            const p3 = new THREE.Mesh(new THREE.BoxGeometry(40, 0.1, 4), matPath); p3.position.set(0,0.05,-25);
+            // Side paths
+            const p4 = new THREE.Mesh(new THREE.BoxGeometry(4, 0.1, 10), matPath); p4.position.set(-18, 0.05, -5); p4.rotation.y = Math.PI/2;
+            const p5 = new THREE.Mesh(new THREE.BoxGeometry(4, 0.1, 10), matPath); p5.position.set(18, 0.05, -5); p5.rotation.y = Math.PI/2;
+
+            paths.add(p1,p2,p3,p4,p5); this.scene.add(paths);
+
+            // Booths
+            this.booths = [
+                {id:1, x:0, z:20, col:0xDDDDDD}, {id:2, x:-18, z:-5, col:0x4169E1},
+                {id:3, x:18, z:-5, col:0xFFDAB9}, {id:4, x:-18, z:-25, col:0x9370DB},
+                {id:5, x:18, z:-25, col:0x333333}
+            ];
+
+            // Trees
+            for(let i=0; i<40; i++) {
+                const t = new THREE.Group();
+                const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.8,2), new THREE.MeshStandardMaterial({color:0x8B4513}));
+                trunk.position.y=1;
+                const leaves = new THREE.Mesh(new THREE.ConeGeometry(2.5,6,8), new THREE.MeshStandardMaterial({color:0x228B22}));
+                leaves.position.y=4;
+                t.add(trunk, leaves);
+                let tx=(Math.random()-0.5)*90, tz=(Math.random()-0.5)*90;
+                if(Math.abs(tx)<10 && Math.abs(tz)<30) tx+=15;
+                t.position.set(tx,0,tz); this.scene.add(t);
+            }
+
+            const sun = new THREE.DirectionalLight(0xffffff, 1); sun.position.set(50,100,50); this.scene.add(sun);
+            this.scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+
+            // Minimap (park only)
+            this.mm = document.getElementById("minimap");
+            this.mmCtx = this.mm.getContext("2d");
+            this.mmVisible = true;
+
+            // Minimap (park only)
+            this.mm = document.getElementById('minimap');
+            this.mmCtx = this.mm.getContext('2d');
+            this.mm.style.display = 'block';
+
+            this.modalOpen = false;
+            this.modalSel = true; // Yes
+            this.boothMeshes = [];
+            this.rebuildBooths();
+        }
+
+        rebuildBooths() {
+            for (const m of this.boothMeshes) this.scene.remove(m);
+            this.boothMeshes = [];
+
+            this.booths.forEach(b => {
+                const mesh = new THREE.Mesh(new THREE.BoxGeometry(5,5,5), new THREE.MeshStandardMaterial({color:b.col}));
+                mesh.position.set(b.x, 2.5, b.z);
+
+                const door = new THREE.Mesh(new THREE.BoxGeometry(2.5, 3.5, 0.2), new THREE.MeshStandardMaterial({color: 0x222}));
+                door.position.set(0, -0.75, 2.6);
+                mesh.add(door);
+
+                const num = new THREE.Mesh(new THREE.SphereGeometry(0.8), new THREE.MeshBasicMaterial({color: 0xFFFFFF}));
+                num.position.set(0, 3.5, 0);
+                mesh.add(num);
+
+                if(state.completed.has(b.id)) {
+                    const check = new THREE.Group();
+                    const a = new THREE.Mesh(new THREE.BoxGeometry(0.5,2.0,0.2), new THREE.MeshBasicMaterial({color:0x00FF00}));
+                    const b2 = new THREE.Mesh(new THREE.BoxGeometry(0.5,3.0,0.2), new THREE.MeshBasicMaterial({color:0x00FF00}));
+                    a.position.set(-0.6, 5.0, 0); a.rotation.z = -0.75;
+                    b2.position.set(0.4, 5.2, 0); b2.rotation.z = 0.75;
+                    check.add(a,b2);
+                    mesh.add(check);
+                }
+
+                this.scene.add(mesh);
+                this.boothMeshes.push(mesh);
+            });
+        }
+
+        update(dt) {
+            if (state.mode === 'booth') return;
+            if(this.modalOpen) {
+                renderer.render(this.scene, this.camera);
+
+            this.drawMiniMap();
+            
+                return;
+            }
+
+            const rotSpeed = 2.0 * dt;
+            const moveSpeed = 8.0 * dt;
+
+            if(keys.ArrowLeft) state.player.rot += rotSpeed;
+            if(keys.ArrowRight) state.player.rot -= rotSpeed;
+
+            const dx = Math.sin(state.player.rot);
+            const dz = Math.cos(state.player.rot);
+
+            if(keys.ArrowUp) { state.player.x += dx * moveSpeed; state.player.z += dz * moveSpeed; }
+            if(keys.ArrowDown) { state.player.x -= dx * moveSpeed; state.player.z -= dz * moveSpeed; }
+
+            this.camera.position.x = state.player.x - dx * 8;
+            this.camera.position.z = state.player.z - dz * 8;
+            this.camera.position.y = 5;
+            this.camera.lookAt(state.player.x, 2, state.player.z);
+
+            for (const b of this.booths) {
+                const dist = Math.hypot(state.player.x - b.x, state.player.z - b.z);
+                if(dist < 7) {
+                    const now = performance.now();
+                    if (!(state.lastExitBoothId === b.id && now < state.exitCooldownUntil)) {
+                        this.openModal(b.id);
+                        break;
+                    }
+                }
+            }
+
+            renderer.render(this.scene, this.camera);
+
+            this.drawMiniMap();
+            
+        }
+
+        drawMiniMap() {
+            const c = this.mm;
+            const ctx = this.mmCtx;
+            if (!c || !ctx) return;
+            const w = c.width, h = c.height;
+            ctx.clearRect(0,0,w,h);
+
+            // Park bounds (match ground size roughly)
+            const worldMin = -60, worldMax = 60;
+            const toX = (x) => (x - worldMin) / (worldMax - worldMin) * w;
+            const toY = (z) => (z - worldMin) / (worldMax - worldMin) * h;
+
+            // Background
+            ctx.fillStyle = 'rgba(0,0,0,0.35)';
+            ctx.fillRect(0,0,w,h);
+            ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(2,2,w-4,h-4);
+
+            // Booth markers
+            for (const b of this.booths) {
+                const bx = toX(b.x);
+                const by = toY(b.z);
+                ctx.beginPath();
+                ctx.arc(bx, by, 4, 0, Math.PI*2);
+                ctx.fillStyle = state.completed.has(b.id) ? '#2ee06b' : '#f2c94c';
+                ctx.fill();
+                ctx.strokeStyle = 'rgba(0,0,0,0.5)';
+                ctx.stroke();
+            }
+
+            // Player arrow
+            const px = toX(state.player.x);
+            const py = toY(state.player.z);
+            const a = -state.player.rot; // canvas Y goes down
+            const r = 8;
+            ctx.fillStyle = '#ffffff';
+            ctx.beginPath();
+            ctx.moveTo(px + Math.sin(a)*r, py - Math.cos(a)*r);
+            ctx.lineTo(px + Math.sin(a+2.5)*r*0.8, py - Math.cos(a+2.5)*r*0.8);
+            ctx.lineTo(px + Math.sin(a-2.5)*r*0.8, py - Math.cos(a-2.5)*r*0.8);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        openModal(id) {
+            this.modalOpen = true;
+            state.mode = 'modal';
+            state.activeBoothId = id;
+            document.getElementById('modal-title').innerText = "ביתן " + id;
+            document.getElementById('interact-modal').style.display = 'flex';
+            this.modalSel = true;
+            this.updateModalUI();
+        }
+
+        closeModal() {
+            this.modalOpen = false;
+            state.mode = 'park';
+            document.getElementById('interact-modal').style.display = 'none';
+            state.player.z += Math.cos(state.player.rot)*3;
+            state.player.x += Math.sin(state.player.rot)*3;
+        }
+
+        handleInput(key) {
+            if(this.modalOpen) {
+                if(key === 'ArrowRight' || key === 'ArrowLeft' || key === 'ArrowUp' || key === 'ArrowDown') {
+                    this.modalSel = !this.modalSel;
+                    this.updateModalUI();
+                }
+                if(key === 'Enter') {
+                    if(this.modalSel) enterBooth(state.activeBoothId);
+                    else this.closeModal();
+                }
+            }
+        }
+
+        updateModalUI() {
+            const y = document.getElementById('btn-enter');
+            const n = document.getElementById('btn-cancel');
+            if(this.modalSel) { y.classList.add('selected'); n.classList.remove('selected'); }
+            else { y.classList.remove('selected'); n.classList.add('selected'); }
+        }
+    }
+
+    const park = new Park();
+    park.init();
+
+    document.getElementById('btn-enter').onclick = () => enterBooth(state.activeBoothId);
+    document.getElementById('btn-cancel').onclick = () => park.closeModal();
+
+    window.addEventListener('keydown', (e) => {
+        if (park.modalOpen) {
+            // keep it keyboard-only and avoid page scrolling
+            if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Enter'].includes(e.key)) e.preventDefault();
+            park.handleInput(e.key);
+        }
+    }, { passive: false });
+
+    const clock = new THREE.Clock();
+    function animate() {
+        requestAnimationFrame(animate);
+        const dt = clock.getDelta();
+        park.update(dt);
+    }
+    animate();
+</script>
+</body>
+</html>

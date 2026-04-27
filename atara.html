@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Behavioral Canvas – Recorder</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.3/p5.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: #0a0a0a;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+<script>
+/*
+  PROJECT: Behavioral Canvas – RECORDER (Final - BIG TEXT Version)
+*/
+
+// --- משתנים גלובליים ---
+let fileInput; 
+let inpAge, selGender, selHand, btnSubmit;
+
+// שאלות ברירת מחדל
+let defaultQuestions = [
+  { q: "אם הייתה לך אפשרות אחת, במה תבחר/י?", a: "לשנות את העבר", b: "לדעת את העתיד" },
+  { q: "מה עדיף לקבל?", a: "אמת מכאיבה", b: "שקר מנחם" },
+  { q: "המחיר שאהיה מוכן/ה לשלם...", a: "חיים ללא פרטיות", b: "חיים בבדידות" },
+  { q: "חשוב לי יותר להיות...", a: "מוערך/ת (Respect)", b: "נאהב/ת (Love)" },
+  { q: "רוב ההחלטות שלי מגיעות...", a: "מהראש (היגיון)", b: "מהבטן (רגש)" }
+];
+let questions = [];
+
+// ניהול מצבי מסך: -1=Landing, 0=Form, 1=Intro, 2=Question, 3=End
+let state = -1; 
+let currentQ = 0;
+
+// נתונים לאיסוף
+let demographics = { age: "", gender: "", hand: "" };
+let sessionId = "", participantId = "";
+let startedAtEpochMs = 0; 
+let trials = [];
+let currentPath = [];
+
+// הגדרות עיצוב
+let bgColor = 10;
+let btnRadius = 90; 
+let posA = { x: 0, y: 0 }, posB = { x: 0, y: 0 };
+let questionShownAtMs = 0;
+let hover = { A: { inside: false, enterMs: 0, totalMs: 0 }, B: { inside: false, enterMs: 0, totalMs: 0 } };
+let lastAngle = null, jitterSumAbs = 0, jitterCount = 0, startPoint = null;
+
+// ================= P5 SETUP & DRAW =================
+
+function setup() {
+  createCanvas(windowWidth, windowHeight);
+  rectMode(CENTER);
+  
+  questions = [...defaultQuestions];
+
+  // יצירת טופס הדמוגרפיה
+  setupDemographicsForm();
+
+  // כפתור נסתר לחוקר
+  fileInput = createFileInput(handleCustomQuestions); 
+  fileInput.position(-1000, -1000); 
+
+  sessionId = "sess_" + Date.now() + "_" + Math.floor(Math.random() * 1e5);
+  participantId = "p" + Math.floor(Math.random() * 1e5);
+  
+  setPositions(); 
+  setSystemFont();
+}
+
+function draw() {
+  // ניהול תצוגת הטופס
+  if (state === 0) showForm(true); 
+  else showForm(false);
+
+  if (state === -1) drawLandingPage();
+  else if (state === 0) drawDemographicsScreen();
+  else if (state === 1) drawIntro();
+  else if (state === 2) drawQuestionScreen();
+  else drawEnd();
+}
+
+// ================= 1. LANDING PAGE =================
+
+function drawLandingPage() {
+  background(bgColor); 
+  textAlign(CENTER, CENTER);
+  
+  // כותרת ראשית
+  fill(255); textStyle(BOLD); textSize(40); 
+  text("BEHAVIORAL LAB SYSTEM", width/2, height * 0.25);
+
+  // משפט הסבר
+  fill(0, 255, 255);
+  textSize(18); textStyle(NORMAL);
+  text("מערכת זו בוחנת את תהליך קבלת ההחלטות באמצעות ניתוח תנועות עכבר.", width/2, height * 0.35);
+
+  // כפתורים
+  drawBtn("START EXPERIMENT", height * 0.55, 0);
+  drawBtn("LOAD CONFIG (RESEARCHER)", height * 0.70, 1);
+  
+  // פוטר
+  fill(80); textSize(12); textStyle(NORMAL);
+  text(`System Ready | ID: ${sessionId}`, width/2, height - 30);
+}
+
+function drawBtn(txt, y, type) {
+  let w = 320, h = 65; 
+  let isHover = abs(mouseX - width/2) < w/2 && abs(mouseY - y) < h/2;
+  let c = type === 0 ? color(0, 255, 255) : color(255, 100, 0);
+  
+  stroke(c); strokeWeight(2);
+  fill(isHover ? color(red(c), green(c), blue(c), 50) : 0);
+  rect(width/2, y, w, h, 30);
+  
+  noStroke(); fill(255); 
+  textSize(22); textStyle(BOLD);
+  text(txt, width/2, y);
+}
+
+// ================= 2. DEMOGRAPHICS FORM =================
+
+function setupDemographicsForm() {
+  let inputW = 240;
+  let startY = height * 0.38; 
+  let centerX = width / 2 - inputW / 2;
+
+  inpAge = createInput('');
+  inpAge.attribute('placeholder', 'גיל (לדוגמה: 25)');
+  styleInput(inpAge, centerX, startY);
+
+  selGender = createSelect();
+  selGender.option('מגדר: בחר/י');
+  selGender.option('אישה');
+  selGender.option('גבר');
+  selGender.option('אחר');
+  styleInput(selGender, centerX, startY + 60);
+
+  selHand = createSelect();
+  selHand.option('יד חזקה: בחר/י');
+  selHand.option('ימין');
+  selHand.option('שמאל');
+  styleInput(selHand, centerX, startY + 120);
+
+  btnSubmit = createButton('המשך להוראות >');
+  btnSubmit.mousePressed(submitDemographics);
+  
+  btnSubmit.position(centerX, startY + 200);
+  btnSubmit.size(inputW, 45);
+  btnSubmit.style('background', '#00FFFF');
+  btnSubmit.style('color', '#000');
+  btnSubmit.style('font-weight', 'bold');
+  btnSubmit.style('font-size', '18px'); 
+  btnSubmit.style('cursor', 'pointer');
+  btnSubmit.style('border', 'none');
+  btnSubmit.style('border-radius', '6px');
+
+  showForm(false);
+}
+
+function styleInput(el, x, y) {
+  el.position(x, y);
+  el.size(240, 40);
+  el.style('font-family', 'sans-serif');
+  el.style('font-size', '16px');
+  el.style('padding-right', '10px'); 
+  el.style('background', '#F0F0F0'); 
+  el.style('color', '#000000');      
+  el.style('border', '1px solid #CCC');
+  el.style('direction', 'rtl');
+  el.style('text-align', 'right');
+  el.style('border-radius', '6px');
+  el.style('outline', 'none');
+}
+
+function showForm(show) {
+  if (show) { inpAge.show(); selGender.show(); selHand.show(); btnSubmit.show(); }
+  else { inpAge.hide(); selGender.hide(); selHand.hide(); btnSubmit.hide(); }
+}
+
+function submitDemographics() {
+  let a = inpAge.value();
+  let g = selGender.value();
+  let h = selHand.value();
+
+  if (a === "" || g === 'מגדר: בחר/י' || h === 'יד חזקה: בחר/י') {
+    alert("נא למלא את כל השדות לפני ההמשך.");
+    return;
+  }
+  
+  demographics = { age: a, gender: g, hand: h };
+  startedAtEpochMs = Date.now(); 
+  state = 1; 
+}
+
+function drawDemographicsScreen() {
+  background(bgColor);
+  textAlign(CENTER, CENTER);
+  
+  fill(255); textStyle(BOLD); textSize(34);
+  text("פרטים אישיים", width / 2, height * 0.15);
+  
+  textSize(18); textStyle(NORMAL); fill(255); 
+  text("המידע משמש לניתוח סטטיסטי בלבד ונשמר באופן אנונימי.", width / 2, height * 0.22);
+}
+
+// ================= 3. EXPERIMENT LOGIC =================
+
+function drawIntro() {
+  background(bgColor); 
+  fill(255); textSize(34); textStyle(BOLD); 
+  text("הוראות", width/2, height*0.3);
+  textSize(22); textStyle(NORMAL); 
+  text("בכל מסך תוצג דילמה.\nהזיזו את העכבר לעבר התשובה המועדפת עליכם.\n\nלחצו בכל מקום כדי להתחיל.", width/2, height*0.5);
+}
+
+function drawQuestionScreen() {
+  noStroke();
+  let s = dist(mouseX, mouseY, pmouseX, pmouseY);
+  let r = map(s, 0, 60, 30, 5, true);
+  let a = map(s, 0, 60, 40, 200, true);
+  fill(255, a); ellipse(mouseX, mouseY, r, r);
+
+  if (mouseX !== pmouseX || mouseY !== pmouseY) {
+    currentPath.push({ x: mouseX, y: mouseY, speed: s, t: millis() });
+    updateJitter(pmouseX, pmouseY, mouseX, mouseY);
+  }
+  updateHoverDwell();
+  drawCleanUI();
+}
+
+function drawCleanUI() {
+  let overA = dist(mouseX, mouseY, posA.x, posA.y) < btnRadius;
+  let overB = dist(mouseX, mouseY, posB.x, posB.y) < btnRadius;
+  cursor((overA || overB) ? HAND : ARROW);
+  setSystemFont();
+
+  stroke(bgColor, 200); strokeWeight(4); fill(255); 
+  textSize(36); textStyle(BOLD);
+  text(questions[currentQ].q, width / 2, height * 0.2);
+  
+  noStroke(); fill(120); textSize(16);
+  text(`Q ${currentQ + 1} / ${questions.length}`, width/2, height*0.2 + 60);
+
+  drawCleanButton(questions[currentQ].a, posA.x, posA.y, overA);
+  drawCleanButton(questions[currentQ].b, posB.x, posB.y, overB);
+}
+
+function drawCleanButton(label, x, y, hovered) {
+  stroke(255, hovered ? 220 : 120); 
+  strokeWeight(hovered ? 3 : 1.5); 
+  if(hovered) fill(255, 30); else noFill();
+  ellipse(x, y, btnRadius * 2); 
+  
+  noStroke(); fill(255, hovered ? 255 : 220); 
+  let s = constrain(btnRadius * 0.45, 24, 42); 
+  textSize(s); textStyle(BOLD);
+  let boxSize = btnRadius * 1.6; 
+  text(label, x, y, boxSize, boxSize); 
+}
+
+function startQuestion() {
+  currentPath = [];
+  questionShownAtMs = millis();
+  hover = { A: { inside: false, enterMs: 0, totalMs: 0 }, B: { inside: false, enterMs: 0, totalMs: 0 } };
+  lastAngle = null; jitterSumAbs = 0; jitterCount = 0;
+  setPositions(); background(bgColor);
+  startPoint = { x: mouseX, y: mouseY };
+}
+
+function answer(c) {
+  finalizeHoverTotals();
+  let rt = millis() - questionShownAtMs;
+  let len = 0; 
+  for(let i=1; i<currentPath.length; i++) len += dist(currentPath[i-1].x, currentPath[i-1].y, currentPath[i].x, currentPath[i].y);
+
+  trials.push({
+    session_id: sessionId, participant_id: participantId, demographics: demographics,
+    q_index: currentQ, question: questions[currentQ].q, choice: c, 
+    rt_ms: Math.round(rt), path_len: len.toFixed(1),
+    jitter_score: (jitterCount > 0 ? (jitterSumAbs / jitterCount).toFixed(4) : 0),
+    pathData: currentPath
+  });
+  
+  currentQ++; 
+  if (currentQ >= questions.length) finishExperiment(); 
+  else startQuestion();
+}
+
+function finishExperiment() {
+  state = 3;
+  let now = new Date();
+  let timeString = now.toLocaleString("he-IL"); 
+  let totalDurationSec = ((Date.now() - startedAtEpochMs) / 1000).toFixed(1);
+
+  let meta = { 
+    project: "Behavioral Canvas", version: "Final Submission", 
+    sessionId: sessionId, timestamp: timeString, 
+    duration_sec: totalDurationSec, demographics: demographics 
+  };
+  saveJSON({ meta, trials }, `behavioral_data_${sessionId}.json`);
+}
+
+function drawEnd() {
+  background(bgColor); 
+  fill(255); textSize(44); textStyle(BOLD); text("תודה רבה!", width/2, height/2);
+  textSize(20); textStyle(NORMAL); fill(180); text("הנתונים נשמרו בהצלחה.", width/2, height/2 + 60);
+}
+
+// ================= HELPERS & RESIZE =================
+
+function mousePressed() {
+  if (state === -1) {
+    if (abs(mouseX - width/2) < 160 && abs(mouseY - height*0.55) < 32) state = 0;
+    if (abs(mouseX - width/2) < 160 && abs(mouseY - height*0.70) < 32) fileInput.elt.click();
+  }
+  else if (state === 1) { state = 2; startQuestion(); }
+  else if (state === 2) {
+    let inA = dist(mouseX, mouseY, posA.x, posA.y) < btnRadius;
+    let inB = dist(mouseX, mouseY, posB.x, posB.y) < btnRadius;
+    if (inA) answer("A"); else if (inB) answer("B");
+  }
+}
+
+function handleCustomQuestions(file) {
+  if (file.subtype === 'json' && Array.isArray(file.data)) {
+    questions = file.data; alert("השאלון נטען בהצלחה!"); state = 0; 
+  } else alert("שגיאה: הקובץ חייב להיות JSON.");
+}
+
+function updateHoverDwell(){let n=millis(),dA=dist(mouseX,mouseY,posA.x,posA.y)<btnRadius,dB=dist(mouseX,mouseY,posB.x,posB.y)<btnRadius;if(dA&&!hover.A.inside){hover.A.inside=true;hover.A.enterMs=n}else if(!dA&&hover.A.inside){hover.A.inside=false;hover.A.totalMs+=n-hover.A.enterMs}if(dB&&!hover.B.inside){hover.B.inside=true;hover.B.enterMs=n}else if(!dB&&hover.B.inside){hover.B.inside=false;hover.B.totalMs+=n-hover.B.enterMs}}
+function finalizeHoverTotals(){let n=millis();if(hover.A.inside)hover.A.totalMs+=n-hover.A.enterMs;if(hover.B.inside)hover.B.totalMs+=n-hover.B.enterMs;}
+function updateJitter(x1,y1,x2,y2){let dx=x2-x1,dy=y2-y1;if(dx===0&&dy===0)return;let a=atan2(dy,dx);if(lastAngle!==null){let d=a-lastAngle;while(d>PI)d-=TWO_PI;while(d<-PI)d+=TWO_PI;jitterSumAbs+=abs(d);jitterCount++}lastAngle=a;}
+function setPositions(){let mx=width*0.15,my=height*0.25;if(currentQ%2===0){posA={x:width-mx,y:my};posB={x:mx,y:height-my}}else{posA={x:mx,y:my};posB={x:width-mx,y:height-my}}}
+function setSystemFont(){textFont("-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif");}
+
+function windowResized(){
+  resizeCanvas(windowWidth,windowHeight);
+  if (state === 0) {
+    let startY = height * 0.38; 
+    let centerX = width / 2 - 120; 
+    styleInput(inpAge, centerX, startY);
+    styleInput(selGender, centerX, startY + 60);
+    styleInput(selHand, centerX, startY + 120);
+    btnSubmit.position(centerX, startY + 200);
+  }
+}
+</script>
+</body>
+</html>

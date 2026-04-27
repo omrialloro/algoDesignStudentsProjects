@@ -1,0 +1,235 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neon Flux: External Telemetry</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --cyan: #00f2ff; --purple: #bc13fe; --magenta: #ff00ff; --glass-bg: rgba(10, 10, 30, 0.85); }
+        body { margin: 0; background: #02020a; color: var(--cyan); font-family: 'Orbitron', sans-serif; overflow: hidden; display: flex; flex-direction: column; align-items: center; }
+        
+        #gameContainer { position: relative; width: 100vw; height: 50vh; border-bottom: 2px solid var(--purple); background: radial-gradient(circle at center, #0a0a25 0%, #02020a 100%); }
+        canvas { width: 100%; height: 100%; display: block; }
+        
+        .hud { position: absolute; top: 20px; width: 90%; left: 5%; display: flex; justify-content: space-between; pointer-events: none; z-index: 20; }
+        .glass-panel { background: var(--glass-bg); padding: 10px 15px; border: 1px solid var(--cyan); border-radius: 4px; backdrop-filter: blur(8px); box-shadow: 0 0 15px rgba(0, 242, 255, 0.15); }
+        
+        #energy-container { width: 150px; height: 6px; background: rgba(0,0,0,0.5); border: 1px solid var(--purple); margin-top: 5px; position: relative; }
+        #energy-bar { width: 100%; height: 100%; background: linear-gradient(90deg, var(--purple), var(--cyan)); transition: width 0.1s; }
+        
+        #analysisContainer { width: 95vw; height: 45vh; margin-top: 10px; display: none; flex-direction: column; align-items: center; }
+        #chartWrapper { width: 100%; height: 75%; background: var(--glass-bg); border: 1px solid var(--purple); padding: 10px; border-radius: 8px; box-sizing: border-box; }
+        
+        /* EXTERNAL LEGEND */
+        #externalLegend { 
+            width: 100%; margin-top: 10px; padding: 12px; 
+            background: var(--glass-bg); border: 1px solid var(--cyan); 
+            border-radius: 4px; display: flex; justify-content: space-around; 
+            font-size: 9px; letter-spacing: 1px; box-sizing: border-box;
+        }
+        .legend-item { display: flex; align-items: center; gap: 8px; }
+        .key-line { width: 20px; height: 3px; border-radius: 2px; }
+        .key-dot { width: 6px; height: 6px; border-radius: 50%; background: white; box-shadow: 0 0 5px white; }
+
+        .game-over-msg { position: absolute; top: 40%; width: 100%; text-align: center; color: var(--magenta); font-size: 20px; display: none; pointer-events: none; text-shadow: 0 0 15px var(--magenta); z-index: 100; }
+    </style>
+</head>
+<body>
+
+<div id="gameContainer">
+    <div id="gameOverMsg" class="game-over-msg">DATA LINK BROKEN</div>
+    <div class="hud">
+        <div class="glass-panel">SCORE: <span id="score">0000</span></div>
+        <div class="glass-panel">
+            ENERGY_STABILITY
+            <div id="energy-container"><div id="energy-bar"></div></div>
+        </div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+</div>
+
+<div id="analysisContainer">
+    <div id="chartWrapper">
+        <canvas id="telemetryChart"></canvas>
+    </div>
+    
+    <div id="externalLegend">
+        <div class="legend-item"><div class="key-line" style="background: var(--cyan);"></div> VERTICAL ASCENT</div>
+        <div class="legend-item"><div class="key-line" style="background: var(--magenta);"></div> VERTICAL DESCENT</div>
+        <div class="legend-item"><div class="key-line" style="background: rgba(188, 19, 254, 0.5); border: 1px dashed var(--purple);"></div> HORIZONTAL FLUX</div>
+        <div class="legend-item"><div class="key-dot"></div> CHRONO BURST SPIKE</div>
+    </div>
+    
+    <div style="text-align: center; font-size: 9px; color: var(--purple); margin-top: 8px;">[ SPACE ] TO REBOOT SYSTEM</div>
+</div>
+
+<script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const scoreEl = document.getElementById("score");
+    const energyBar = document.getElementById("energy-bar");
+    const analysisContainer = document.getElementById("analysisContainer");
+    const gameOverMsg = document.getElementById("gameOverMsg");
+    
+    let ball, paddle, bricks, glitches = [], isGameOver = false, score, energy, myChart;
+    let historyY = [], historyX = [], historySlow = [], trail = [];
+    let isClicking = false, gameStarted = false;
+
+    class Glitch {
+        constructor(x, y, w, h) {
+            this.x = x; this.y = y; this.w = w; this.h = h;
+            this.life = 25;
+        }
+        draw() {
+            this.life--;
+            ctx.fillStyle = Math.random() > 0.5 ? "var(--magenta)" : "var(--cyan)";
+            ctx.fillRect(this.x + Math.random()*20-10, this.y + Math.random()*10-5, this.w, this.h);
+        }
+    }
+
+    function createBrick() {
+        return { x: Math.random()*(canvas.width-100)+50, y: Math.random()*(canvas.height*0.4)+60, w: 80, h: 20 };
+    }
+
+    function init() {
+        canvas.width = canvas.offsetWidth; 
+        canvas.height = canvas.offsetHeight;
+        isGameOver = false; gameStarted = false; score = 0; energy = 100; glitches = []; 
+        historyY = []; historyX = []; historySlow = []; trail = [];
+        scoreEl.innerText = "0000";
+        energyBar.style.width = "100%";
+        gameOverMsg.style.display = "none";
+        analysisContainer.style.display = "none";
+        
+        bricks = Array.from({length: 10}, createBrick);
+        ball = { x: canvas.width/2, y: canvas.height/4, vx: 2, vy: 2, radius: 8 };
+        paddle = { width: 180, height: 14, x: canvas.width/2 - 90, y: canvas.height - 50 };
+        
+        requestAnimationFrame(draw);
+    }
+
+    window.onmousedown = () => isClicking = true;
+    window.onmouseup = () => isClicking = false;
+    window.onmousemove = e => {
+        const rect = canvas.getBoundingClientRect();
+        paddle.x = e.clientX - rect.left - paddle.width/2;
+    };
+    window.onkeydown = e => { if(e.code === "Space" && isGameOver) init(); };
+
+    function showChart() {
+        analysisContainer.style.display = "flex";
+        const cCtx = document.getElementById('telemetryChart').getContext('2d');
+        if(myChart) myChart.destroy();
+        
+        myChart = new Chart(cCtx, {
+            type: 'line',
+            data: { 
+                labels: historyY.map((_,i)=>i), 
+                datasets: [
+                    { 
+                        data: historyY, 
+                        borderColor: '#00f2ff', 
+                        borderWidth: 2,
+                        pointRadius: 0, 
+                        segment: {borderColor: c=>c.p0.parsed.y < c.p1.parsed.y ? '#ff00ff':'#00f2ff'}
+                    },
+                    {
+                        data: historyX,
+                        borderColor: 'rgba(188, 19, 254, 0.4)',
+                        borderDash: [5, 5],
+                        borderWidth: 1.5,
+                        pointRadius: 0
+                    },
+                    {
+                        data: historySlow.map(v => v ? canvas.height : null),
+                        borderColor: '#fff',
+                        pointRadius: 3,
+                        showLine: false
+                    }
+                ] 
+            },
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false, 
+                scales: { 
+                    x: {display:false}, 
+                    y: {reverse:true, grid:{color:'#1a1a2e'}, ticks:{display:false}} 
+                }, 
+                plugins: { legend: { display: false } } 
+            }
+        });
+    }
+
+    function draw() {
+        if(isGameOver) return;
+
+        let dt = (isClicking && energy > 1) ? 0.35 : 1.0;
+        if(isClicking && energy > 1) { energy -= 0.6; energyBar.style.width = energy + "%"; }
+
+        ball.x += ball.vx * dt; 
+        ball.y += ball.vy * dt;
+        
+        historyY.push(Math.round(ball.y));
+        historyX.push(Math.round(ball.x));
+        historySlow.push(isClicking && energy > 1);
+
+        trail.push({x: ball.x, y: ball.y}); 
+        if(trail.length > 10) trail.shift();
+
+        if(ball.x - ball.radius < 0 || ball.x + ball.radius > canvas.width) {
+            ball.vx *= -1;
+            if(gameStarted) energy = Math.max(0, energy - 7);
+            energyBar.style.width = energy + "%";
+        }
+        if(ball.y - ball.radius < 0) ball.vy = Math.abs(ball.vy);
+
+        bricks.forEach((b, i) => {
+            if (ball.x + ball.radius > b.x && ball.x - ball.radius < b.x + b.w && ball.y + ball.radius > b.y && ball.y - ball.radius < b.y + b.h) {
+                ball.vy *= -1;
+                glitches.push(new Glitch(b.x, b.y, b.w, b.h));
+                if(gameStarted) energy = Math.min(100, energy + 12);
+                bricks[i] = createBrick();
+                score += 100; scoreEl.innerText = score.toString().padStart(4, '0');
+            }
+        });
+
+        if(ball.y + ball.radius > paddle.y && ball.x > paddle.x && ball.x < paddle.x + paddle.width && ball.vy > 0) {
+            if(!gameStarted) {
+                gameStarted = true;
+                let mag = Math.sqrt(ball.vx*ball.vx + ball.vy*ball.vy);
+                ball.vx = (ball.vx/mag) * 8.5; ball.vy = (ball.vy/mag) * 8.5;
+            }
+            let hitPos = (ball.x - (paddle.x + paddle.width/2)) / (paddle.width/2);
+            ball.vx = hitPos * 10; ball.vy = -Math.abs(ball.vy); ball.y = paddle.y - ball.radius;
+            energy = Math.min(100, energy + 4);
+        }
+
+        if(ball.y > canvas.height) { isGameOver = true; gameOverMsg.style.display = "block"; showChart(); return; }
+
+        ctx.clearRect(0,0, canvas.width, canvas.height);
+        bricks.forEach(b => {
+            ctx.strokeStyle = "rgba(188, 19, 254, 0.4)"; ctx.strokeRect(b.x, b.y, b.w, b.h);
+            ctx.fillStyle = "rgba(188, 19, 254, 0.1)"; ctx.fillRect(b.x, b.y, b.w, b.h);
+        });
+        glitches = glitches.filter(g => g.life > 0); glitches.forEach(g => g.draw());
+
+        let grad = ctx.createLinearGradient(paddle.x, 0, paddle.x + paddle.width, 0);
+        grad.addColorStop(0, "#ff00ff"); grad.addColorStop(0.5, "#00f2ff"); grad.addColorStop(1, "#ff00ff");
+        ctx.fillStyle = grad; ctx.shadowBlur = 15; ctx.shadowColor = "var(--cyan)";
+        ctx.beginPath(); ctx.roundRect(paddle.x, paddle.y, paddle.width, paddle.height, 5); ctx.fill(); ctx.shadowBlur = 0;
+
+        trail.forEach((t, i) => {
+            ctx.fillStyle = isClicking ? `rgba(188, 19, 254, ${i/10})` : `rgba(0, 242, 255, ${i/10})`;
+            ctx.beginPath(); ctx.arc(t.x, t.y, ball.radius * (i/10), 0, Math.PI*2); ctx.fill();
+        });
+        ctx.fillStyle = "#fff"; ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI*2); ctx.fill();
+
+        requestAnimationFrame(draw);
+    }
+    init();
+</script>
+</body>
+</html>
