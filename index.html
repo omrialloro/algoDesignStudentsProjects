@@ -184,7 +184,7 @@
     <div class="meta">
       <span><strong id="student-count"></strong> students</span>
       <span id="course-year"></span>
-      <span id="course-instructor"></span>
+      <!-- <span id="course-instructor"></span> -->
     </div>
   </div>
 
@@ -198,10 +198,9 @@
 
 const courseData = {
   course: {
-    title: "Design with Algorithms",
-    description: "An exploration of computational design methods, where students use algorithmic thinking to generate, iterate, and evaluate design solutions. Projects range from generative typography and parametric structures to data-driven visual systems and interactive experiences.",
-    year: "2024–2025",
-    instructor: "Studio 4B"
+    title: "Design with Algorithms - Students Projects",
+    description: "Final projects from the Algorithmic Design course, part of the M.A. program in Design in Technological Environments at Holon Institute of Technology.The projects take the form of applied works developed around the course’s core themes: generative design and data-driven design and data banding.",
+    year: "Fall 2025–2026",
   },
   students: [
     {
@@ -268,7 +267,7 @@ function render() {
   document.getElementById("course-desc").textContent = c.description;
   document.getElementById("student-count").textContent = courseData.students.length;
   document.getElementById("course-year").textContent = c.year;
-  document.getElementById("course-instructor").textContent = c.instructor;
+  // document.getElementById("course-instructor").textContent = c.instructor;
 
   const grid = document.getElementById("projects-grid");
   courseData.students.forEach((s, i) => {
